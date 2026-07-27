@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Давление",
+    "slug": "blood-pressure-diary",
+    "version": "0.5.1",
+    "orientation": "portrait",
+    "icon": "./assets/images/coral-app-icon.png",
+    "scheme": "bloodpressure",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF7F4",
+        "foregroundImage": "./assets/images/coral-splash-mark.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/coral-splash-mark.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/coral-splash-mark.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F5F6F9"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
