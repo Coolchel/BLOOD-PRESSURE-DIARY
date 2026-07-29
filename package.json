@@ -8,6 +8,7 @@
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
+    "build:ios": "npx eas-cli@latest build --platform ios --profile adhoc",
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit"
