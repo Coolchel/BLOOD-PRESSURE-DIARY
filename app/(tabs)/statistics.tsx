@@ -111,6 +111,9 @@ export default function StatisticsScreen() {
       </GlassCard>
 
       <Text style={styles.sectionTitle}>Средние значения</Text>
+      <Text style={styles.sectionCaption}>
+        {selected.label} · {measurements.length} из {allMeasurements.length} записей
+      </Text>
       <View style={styles.averageGrid}>
         <View style={[styles.averageCard, { backgroundColor: Palette.coralSoft }]}>
           <IconSymbol name="arrow.up.circle" size={22} color={Palette.coral} />
@@ -141,6 +144,9 @@ export default function StatisticsScreen() {
       </View>
 
       <Text style={styles.sectionTitle}>Диапазон</Text>
+      <Text style={styles.sectionCaption}>
+        {selected.label} · {measurements.length} из {allMeasurements.length} записей
+      </Text>
       <GlassCard contentStyle={styles.rangeCard}>
         <View style={styles.rangeRow}>
           <View>
@@ -264,6 +270,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.3,
     marginTop: Spacing.xl,
+    marginBottom: 4,
+  },
+  sectionCaption: {
+    color: Palette.muted,
+    fontSize: 11.5,
     marginBottom: 12,
   },
   averageGrid: {

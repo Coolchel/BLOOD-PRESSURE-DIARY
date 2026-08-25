@@ -2,7 +2,7 @@
   "name": "blood-pressure-diary",
   "license": "0BSD",
   "main": "expo-router/entry",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",

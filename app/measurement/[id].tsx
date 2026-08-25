@@ -510,6 +510,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: Spacing.lg,
     marginBottom: 10,
   },
   noteLabel: {

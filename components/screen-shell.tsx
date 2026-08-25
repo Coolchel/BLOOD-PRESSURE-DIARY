@@ -20,6 +20,8 @@ type ScreenShellProps = PropsWithChildren<{
 export function ScreenShell({ children, scroll = true, contentContainerStyle }: ScreenShellProps) {
   const content = scroll ? (
     <ScrollView
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+      keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={[styles.scrollContent, contentContainerStyle]}>
@@ -33,7 +35,9 @@ export function ScreenShell({ children, scroll = true, contentContainerStyle }: 
     <SafeAreaView edges={['top']} style={styles.safe}>
       <CoralBackground />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // На iOS вставки под клавиатуру берёт на себя сам ScrollView: он же поднимает
+        // активное поле над ней. Дублировать это отступом контейнера нельзя — экран дёргается.
+        behavior={Platform.OS === 'ios' && !scroll ? 'padding' : undefined}
         style={styles.fill}>
         {content}
       </KeyboardAvoidingView>

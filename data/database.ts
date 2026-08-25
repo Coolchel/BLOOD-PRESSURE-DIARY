@@ -266,7 +266,31 @@ function parseBackup(payload: unknown) {
     }
   }
 
-  return { sessions, readings };
+  // Периоды появились позже — копии без них должны открываться по-прежнему.
+  let phases: BackupPhase[] | null = null;
+  if (value.phases !== undefined) {
+    if (!Array.isArray(value.phases)) throw new Error('invalid phases');
+
+    phases = (value.phases as BackupPhase[]).map((phase) => ({
+      ...phase,
+      ended_at: phase.ended_at ?? null,
+    }));
+
+    for (const phase of phases) {
+      if (
+        !Number.isInteger(phase.id) ||
+        typeof phase.title !== 'string' ||
+        typeof phase.note !== 'string' ||
+        !PHASE_KIND_VALUES.some((kind) => kind === phase.kind) ||
+        Number.isNaN(Date.parse(phase.started_at)) ||
+        (phase.ended_at !== null && Number.isNaN(Date.parse(phase.ended_at)))
+      ) {
+        throw new Error('invalid phase');
+      }
+    }
+  }
+
+  return { sessions, readings, phases };
 }
 
 export async function restoreBackup(db: SQLiteDatabase, payload: unknown) {
@@ -303,9 +327,29 @@ export async function restoreBackup(db: SQLiteDatabase, payload: unknown) {
         reading.position,
       );
     }
+
+    // Копию без раздела периодов считаем «не знающей» о них и текущие не трогаем.
+    if (backup.phases) {
+      await db.runAsync('DELETE FROM experiment_phases');
+
+      for (const phase of backup.phases) {
+        await db.runAsync(
+          `INSERT INTO experiment_phases
+            (id, kind, title, started_at, ended_at, note, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          phase.id,
+          phase.kind,
+          phase.title,
+          phase.started_at,
+          phase.ended_at,
+          phase.note,
+          phase.created_at || new Date().toISOString(),
+        );
+      }
+    }
   });
 
-  return backup.sessions.length;
+  return { sessions: backup.sessions.length, phases: backup.phases?.length ?? null };
 }
 
 export async function getSetting(db: SQLiteDatabase, key: string): Promise<string | null> {
@@ -338,12 +382,23 @@ export async function countMeasurements(db: SQLiteDatabase) {
   return row?.total ?? 0;
 }
 
+export type BackupPhase = {
+  id: number;
+  kind: string;
+  title: string;
+  started_at: string;
+  ended_at: string | null;
+  note: string;
+  created_at: string;
+};
+
 export type BackupPayload = {
   app: string;
   version: number;
   exportedAt: string;
   sessions: BackupSession[];
   readings: BackupReading[];
+  phases: BackupPhase[];
 };
 
 /** Собирает ту же структуру, что принимает restoreBackup — для ручного и автоматического экспорта. */
@@ -367,6 +422,12 @@ export async function buildBackupPayload(db: SQLiteDatabase): Promise<BackupPayl
      FROM measurement_readings r
      JOIN measurement_sessions s ON s.id = r.session_id
      ORDER BY r.session_id, r.position`,
+  );
+
+  const phases = await db.getAllAsync<BackupPhase>(
+    `SELECT id, kind, title, started_at, ended_at, note, created_at
+     FROM experiment_phases
+     ORDER BY started_at`,
   );
 
   return {
@@ -393,6 +454,7 @@ export async function buildBackupPayload(db: SQLiteDatabase): Promise<BackupPayl
       };
     }),
     readings,
+    phases,
   };
 }
 

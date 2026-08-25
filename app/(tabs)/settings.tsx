@@ -23,8 +23,10 @@ import {
   buildBackupPayload,
   clearMeasurements,
   getMeasurements,
+  getPhases,
   restoreBackup,
 } from '@/data/database';
+import { isInsidePhase, phaseKindInfo } from '@/types/experiment';
 
 type SettingsRowProps = {
   icon: AppSymbolName;
@@ -62,7 +64,7 @@ type ToggleRowProps = {
 
 function ToggleRow({ icon, title, subtitle, value, onValueChange }: ToggleRowProps) {
   return (
-    <View style={styles.row}>
+    <View style={styles.toggleRow}>
       <View style={[styles.rowIcon, { backgroundColor: Palette.coralSoft }]}>
         <IconSymbol name={icon} size={21} color={Palette.coral} />
       </View>
@@ -133,6 +135,7 @@ export default function SettingsScreen() {
       if (kind === 'json') {
         file.write(JSON.stringify(await buildBackupPayload(db), null, 2));
       } else {
+        const phases = await getPhases(db);
         const header = [
           'Дата и время',
           'Систолическое, мм рт. ст.',
@@ -142,6 +145,7 @@ export default function SettingsScreen() {
           'Отметки',
           'Заметка',
           'Количество замеров',
+          'Период эксперимента',
         ];
         const rows = measurements.map((item) => [
           new Date(item.measuredAt),
@@ -152,6 +156,7 @@ export default function SettingsScreen() {
           item.tags.join('; '),
           item.note,
           item.readingCount,
+          phases.find((phase) => isInsidePhase(item.measuredAt, phase))?.title ?? '',
         ]);
         const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows], { cellDates: true });
         worksheet.A2.z = 'dd.mm.yyyy hh:mm';
@@ -167,8 +172,9 @@ export default function SettingsScreen() {
           { wch: 28 },
           { wch: 40 },
           { wch: 22 },
+          { wch: 24 },
         ];
-        worksheet['!autofilter'] = { ref: `A1:H${rows.length + 1}` };
+        worksheet['!autofilter'] = { ref: `A1:I${rows.length + 1}` };
 
         const workbook = XLSX.utils.book_new();
         workbook.Props = {
@@ -177,6 +183,66 @@ export default function SettingsScreen() {
           Author: 'Давление',
         };
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Измерения');
+
+        if (phases.length) {
+          const phaseHeader = [
+            'Период',
+            'Что употреблялось',
+            'Начало',
+            'Окончание',
+            'Записей',
+            'Систолическое',
+            'Диастолическое',
+            'Пульс',
+            'Самочувствие',
+            'Заметка',
+          ];
+          const phaseRows = phases.map((phase) => {
+            const inside = measurements.filter((item) =>
+              isInsidePhase(item.measuredAt, phase),
+            );
+            const mean = (pick: (item: (typeof inside)[number]) => number) =>
+              inside.length
+                ? Math.round(inside.reduce((sum, item) => sum + pick(item), 0) / inside.length)
+                : '';
+
+            return [
+              phase.title,
+              phaseKindInfo(phase.kind).label,
+              new Date(phase.startedAt),
+              phase.endedAt ? new Date(phase.endedAt) : 'продолжается',
+              inside.length,
+              mean((item) => item.systolic),
+              mean((item) => item.diastolic),
+              mean((item) => item.pulse),
+              mean((item) => item.wellbeing),
+              phase.note,
+            ];
+          });
+
+          const phaseSheet = XLSX.utils.aoa_to_sheet([phaseHeader, ...phaseRows], {
+            cellDates: true,
+          });
+          for (let row = 2; row <= phaseRows.length + 1; row += 1) {
+            for (const column of ['C', 'D']) {
+              const cell = phaseSheet[`${column}${row}`];
+              if (cell && cell.t === 'd') cell.z = 'dd.mm.yyyy hh:mm';
+            }
+          }
+          phaseSheet['!cols'] = [
+            { wch: 24 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 10 },
+            { wch: 16 },
+            { wch: 16 },
+            { wch: 10 },
+            { wch: 15 },
+            { wch: 40 },
+          ];
+          XLSX.utils.book_append_sheet(workbook, phaseSheet, 'Периоды');
+        }
         const base64 = XLSX.write(workbook, {
           bookType: 'xlsx',
           type: 'base64',
@@ -252,9 +318,15 @@ export default function SettingsScreen() {
             text: 'Восстановить',
             onPress: async () => {
               try {
-                const count = await restoreBackup(db, payload);
+                const restored = await restoreBackup(db, payload);
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert('Готово', `Восстановлено записей: ${count}.`);
+                void runAutoBackup(db);
+                Alert.alert(
+                  'Готово',
+                  restored.phases === null
+                    ? `Восстановлено записей: ${restored.sessions}. Периоды в этой копии не сохранены — текущие оставлены как есть.`
+                    : `Восстановлено записей: ${restored.sessions}, периодов: ${restored.phases}.`,
+                );
               } catch {
                 Alert.alert('Файл не подходит', 'Выбери резервную копию, созданную приложением.');
               }
@@ -340,7 +412,7 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      <Text style={styles.version}>Давление · версия 0.7.0</Text>
+      <Text style={styles.version}>Давление · версия 0.7.1</Text>
     </ScreenShell>
   );
 }
@@ -375,6 +447,7 @@ const styles = StyleSheet.create({
   },
   group: {
     overflow: 'hidden',
+    paddingVertical: 4,
     borderWidth: 1,
     borderColor: Palette.line,
     borderRadius: Radius.large,
@@ -390,6 +463,16 @@ const styles = StyleSheet.create({
   },
   rowPressed: {
     backgroundColor: 'rgba(255,94,87,0.05)',
+  },
+  toggleRow: {
+    minHeight: 88,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    paddingLeft: Spacing.md,
+    // Справа запас больше: у iOS-переключателя тень выходит за границы вёрстки.
+    paddingRight: 18,
+    paddingVertical: 16,
   },
   rowIcon: {
     width: 43,
