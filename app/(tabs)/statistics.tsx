@@ -1,4 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
 import { ScreenShell } from '@/components/screen-shell';
@@ -6,14 +8,36 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WeeklyChart } from '@/components/weekly-chart';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
 import { useMeasurements } from '@/hooks/use-measurements';
+import { usePhaseList } from '@/hooks/use-phases';
 
 function average(values: number[]) {
   if (!values.length) return 0;
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+type Period = 'week' | 'month' | 'quarter' | 'all';
+
+const PERIODS: { key: Period; label: string; days: number | null }[] = [
+  { key: 'week', label: 'Неделя', days: 7 },
+  { key: 'month', label: 'Месяц', days: 30 },
+  { key: 'quarter', label: '3 месяца', days: 90 },
+  { key: 'all', label: 'Всё', days: null },
+];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export default function StatisticsScreen() {
-  const { measurements } = useMeasurements(10000);
+  const { measurements: allMeasurements } = useMeasurements(10000);
+  const [period, setPeriod] = useState<Period>('week');
+  const phases = usePhaseList();
+
+  const selected = PERIODS.find((item) => item.key === period) ?? PERIODS[0];
+  const measurements = useMemo(() => {
+    if (selected.days === null) return allMeasurements;
+
+    const from = Date.now() - selected.days * DAY_MS;
+    return allMeasurements.filter((item) => new Date(item.measuredAt).getTime() >= from);
+  }, [allMeasurements, selected.days]);
   const systolic = measurements.map((item) => item.systolic);
   const diastolic = measurements.map((item) => item.diastolic);
   const pulse = measurements.map((item) => item.pulse);
@@ -24,24 +48,49 @@ export default function StatisticsScreen() {
     <ScreenShell>
       <Text style={styles.eyebrow}>ОБЗОР ПОКАЗАТЕЛЕЙ</Text>
       <Text style={styles.title}>Статистика</Text>
-      <Text style={styles.subtitle}>На основе всех сохранённых записей: {measurements.length}</Text>
+      <Text style={styles.subtitle}>
+        {selected.days === null
+          ? `Все записи: ${measurements.length}`
+          : `${selected.label} · записей: ${measurements.length} из ${allMeasurements.length}`}
+      </Text>
+
+      <View style={styles.periods}>
+        {PERIODS.map((item) => {
+          const active = item.key === period;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              key={item.key}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                setPeriod(item.key);
+              }}
+              style={[styles.periodItem, active && styles.periodItemActive]}>
+              <Text style={[styles.periodText, active && styles.periodTextActive]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       <GlassCard contentStyle={styles.chartCard} style={styles.chartSpacing}>
         <View style={styles.cardHeader}>
           <View style={styles.headerCopy}>
             <Text style={styles.cardTitle}>Динамика давления</Text>
-            <Text style={styles.cardSubtitle}>Систолическое и диастолическое · все записи</Text>
+            <Text style={styles.cardSubtitle}>Систолическое и диастолическое</Text>
           </View>
           <IconSymbol name="chart.line.uptrend.xyaxis" size={23} color={Palette.coral} />
         </View>
-        <WeeklyChart measurements={measurements} />
+        <WeeklyChart measurements={measurements} phases={phases} />
       </GlassCard>
 
       <GlassCard contentStyle={styles.chartCard} style={styles.chartSpacing}>
         <View style={styles.cardHeader}>
           <View style={styles.headerCopy}>
             <Text style={styles.cardTitle}>Динамика пульса</Text>
-            <Text style={styles.cardSubtitle}>Удары в минуту · все записи</Text>
+            <Text style={styles.cardSubtitle}>Удары в минуту</Text>
           </View>
           <IconSymbol name="waveform.path.ecg" size={23} color="#6D78A8" />
         </View>
@@ -52,7 +101,7 @@ export default function StatisticsScreen() {
         <View style={styles.cardHeader}>
           <View style={styles.headerCopy}>
             <Text style={styles.cardTitle}>Динамика самочувствия</Text>
-            <Text style={styles.cardSubtitle}>Оценка от 1 до 10 · все записи</Text>
+            <Text style={styles.cardSubtitle}>Оценка от 1 до 10</Text>
           </View>
           <View style={styles.numberIcon}>
             <Text style={styles.numberIconText}>10</Text>
@@ -146,7 +195,40 @@ const styles = StyleSheet.create({
     color: Palette.muted,
     fontSize: 13,
     marginTop: 5,
+    marginBottom: Spacing.md,
+  },
+  periods: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
     marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Palette.line,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(240,241,245,0.92)',
+  },
+  periodItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 9,
+    borderRadius: Radius.pill,
+  },
+  periodItemActive: {
+    backgroundColor: Palette.surfaceStrong,
+    shadowColor: Palette.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 7,
+    elevation: 3,
+  },
+  periodText: {
+    color: Palette.muted,
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  periodTextActive: {
+    color: Palette.text,
+    fontWeight: '700',
   },
   chartCard: {
     paddingHorizontal: 14,

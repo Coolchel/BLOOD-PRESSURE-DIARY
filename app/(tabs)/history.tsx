@@ -7,9 +7,12 @@ import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Shadow, Spacing } from '@/constants/design';
 import { useMeasurements } from '@/hooks/use-measurements';
+import { usePhaseList } from '@/hooks/use-phases';
+import { findPhaseFor } from '@/types/experiment';
 
 export default function HistoryScreen() {
   const { measurements, loading } = useMeasurements(200);
+  const phases = usePhaseList();
 
   return (
     <ScreenShell>
@@ -41,6 +44,7 @@ export default function HistoryScreen() {
           <MeasurementCard
             key={measurement.id}
             measurement={measurement}
+            phase={findPhaseFor(measurement.measuredAt, phases)}
             onPress={() =>
               router.push({
                 pathname: '/measurement/[id]',

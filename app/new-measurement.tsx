@@ -18,9 +18,11 @@ import {
 import { GlassCard } from '@/components/glass-card';
 import { MetricRow } from '@/components/metric-row';
 import { NumberEntrySheet } from '@/components/number-entry-sheet';
+import { SaveSuccessOverlay } from '@/components/save-success-overlay';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
+import { runAutoBackup } from '@/data/auto-backup';
 import { addMeasurement } from '@/data/database';
 import type { MeasurementMode, Reading } from '@/types/measurement';
 import { WELLBEING_TAGS } from '@/types/measurement';
@@ -80,6 +82,7 @@ export default function NewMeasurementScreen() {
   const [tags, setTags] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const activeConfig = activeMetric ? metricConfig[activeMetric] : undefined;
   const previewReadings = useMemo(() => {
@@ -166,8 +169,9 @@ export default function NewMeasurementScreen() {
     try {
       setSaving(true);
       await addMeasurement(db, { measuredAt, wellbeing, tags, note, mode, readings });
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      // Копия обновляется в фоне и никогда не бросает исключение — экран её не ждёт.
+      void runAutoBackup(db);
+      setSaved(true);
     } catch {
       Alert.alert('Не получилось сохранить', 'Попробуй ещё раз.');
       setSaving(false);
@@ -377,6 +381,12 @@ export default function NewMeasurementScreen() {
           visible
         />
       ) : null}
+
+      <SaveSuccessOverlay
+        onDone={() => router.back()}
+        subtitle={mode === 'series' ? 'Серия добавлена в дневник' : 'Измерение добавлено в дневник'}
+        visible={saved}
+      />
 
       <Modal
         animationType="fade"

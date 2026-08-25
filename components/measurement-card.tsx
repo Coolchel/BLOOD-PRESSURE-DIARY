@@ -2,10 +2,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Spacing } from '@/constants/design';
+import type { ExperimentPhase } from '@/types/experiment';
+import { phaseKindInfo } from '@/types/experiment';
 import type { MeasurementSummary } from '@/types/measurement';
 
 type MeasurementCardProps = {
   measurement: MeasurementSummary;
+  phase?: ExperimentPhase | null;
   onPress?: () => void;
 };
 
@@ -18,7 +21,9 @@ function formatDate(iso: string) {
   }).format(new Date(iso));
 }
 
-export function MeasurementCard({ measurement, onPress }: MeasurementCardProps) {
+export function MeasurementCard({ measurement, phase, onPress }: MeasurementCardProps) {
+  const phaseInfo = phase ? phaseKindInfo(phase.kind) : null;
+
   return (
     <Pressable
       accessibilityHint={onPress ? 'Открывает подробности измерения' : undefined}
@@ -42,6 +47,12 @@ export function MeasurementCard({ measurement, onPress }: MeasurementCardProps) 
         </View>
         <Text style={styles.date}>{formatDate(measurement.measuredAt)}</Text>
         <View style={styles.badges}>
+          {phase && phaseInfo ? (
+            <View style={[styles.phaseChip, { backgroundColor: phaseInfo.soft }]}>
+              <View style={[styles.phaseDot, { backgroundColor: phaseInfo.color }]} />
+              <Text style={[styles.phaseText, { color: phaseInfo.color }]}>{phase.title}</Text>
+            </View>
+          ) : null}
           <View style={styles.wellbeing}>
             <Text style={styles.wellbeingText}>Самочувствие {measurement.wellbeing}/10</Text>
           </View>
@@ -147,6 +158,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+  },
+  phaseChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+  },
+  phaseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  phaseText: {
+    fontSize: 10.5,
+    fontWeight: '700',
   },
   wellbeing: {
     alignSelf: 'flex-start',

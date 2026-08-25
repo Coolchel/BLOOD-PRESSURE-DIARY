@@ -6,6 +6,12 @@ import type {
   MeasurementSummary,
   Reading,
 } from '@/types/measurement';
+import type {
+  ExperimentPhase,
+  PhaseKind,
+  PhaseStats,
+  PhaseWithStats,
+} from '@/types/experiment';
 
 type MeasurementRow = {
   id: number;
@@ -68,7 +74,24 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       position INTEGER NOT NULL,
       FOREIGN KEY (session_id) REFERENCES measurement_sessions(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS experiment_phases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
   `);
+
+  await seedInitialPhases(db);
 
   // Remove sample rows created by earlier versions without touching real measurements.
   await db.withTransactionAsync(async () => {
@@ -283,4 +306,310 @@ export async function restoreBackup(db: SQLiteDatabase, payload: unknown) {
   });
 
   return backup.sessions.length;
+}
+
+export async function getSetting(db: SQLiteDatabase, key: string): Promise<string | null> {
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM app_settings WHERE key = ?',
+    key,
+  );
+
+  return row?.value ?? null;
+}
+
+export async function setSetting(db: SQLiteDatabase, key: string, value: string) {
+  await db.runAsync(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    key,
+    value,
+  );
+}
+
+export async function updateMeasurementNote(db: SQLiteDatabase, id: number, note: string) {
+  await db.runAsync('UPDATE measurement_sessions SET note = ? WHERE id = ?', note.trim(), id);
+}
+
+export async function countMeasurements(db: SQLiteDatabase) {
+  const row = await db.getFirstAsync<{ total: number }>(
+    'SELECT COUNT(*) AS total FROM measurement_sessions',
+  );
+
+  return row?.total ?? 0;
+}
+
+export type BackupPayload = {
+  app: string;
+  version: number;
+  exportedAt: string;
+  sessions: BackupSession[];
+  readings: BackupReading[];
+};
+
+/** Собирает ту же структуру, что принимает restoreBackup — для ручного и автоматического экспорта. */
+export async function buildBackupPayload(db: SQLiteDatabase): Promise<BackupPayload> {
+  const sessions = await db.getAllAsync<{
+    id: number;
+    measured_at: string;
+    wellbeing: number;
+    tags_json: string;
+    note: string;
+    mode: string;
+    created_at: string;
+  }>(
+    `SELECT id, measured_at, wellbeing, tags_json, note, mode, created_at
+     FROM measurement_sessions
+     ORDER BY measured_at DESC`,
+  );
+
+  const readings = await db.getAllAsync<BackupReading>(
+    `SELECT r.session_id, r.systolic, r.diastolic, r.pulse, r.position
+     FROM measurement_readings r
+     JOIN measurement_sessions s ON s.id = r.session_id
+     ORDER BY r.session_id, r.position`,
+  );
+
+  return {
+    app: 'Давление',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    sessions: sessions.map((session) => {
+      let tags: string[] = [];
+
+      try {
+        tags = JSON.parse(session.tags_json) as string[];
+      } catch {
+        tags = [];
+      }
+
+      return {
+        id: session.id,
+        measured_at: session.measured_at,
+        wellbeing: session.wellbeing,
+        tags,
+        note: session.note,
+        mode: session.mode === 'series' ? 'series' : 'single',
+        created_at: session.created_at,
+      };
+    }),
+    readings,
+  };
+}
+
+type PhaseRow = {
+  id: number;
+  kind: string;
+  title: string;
+  started_at: string;
+  ended_at: string | null;
+  note: string;
+};
+
+const PHASE_KIND_VALUES: PhaseKind[] = ['clean', 'coffee', 'energy', 'alcohol', 'mixed'];
+
+function rowToPhase(row: PhaseRow): ExperimentPhase {
+  const kind = PHASE_KIND_VALUES.find((value) => value === row.kind) ?? 'clean';
+
+  return {
+    id: row.id,
+    kind,
+    title: row.title,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    note: row.note,
+  };
+}
+
+/**
+ * Восстанавливает уже прожитые периоды при первом запуске: границу берём не из воздуха,
+ * а из собственной заметки «Начало эксперимента…».
+ */
+async function seedInitialPhases(db: SQLiteDatabase) {
+  const existing = await db.getFirstAsync<{ total: number }>(
+    'SELECT COUNT(*) AS total FROM experiment_phases',
+  );
+  if ((existing?.total ?? 0) > 0) return;
+
+  const first = await db.getFirstAsync<{ measured_at: string }>(
+    'SELECT measured_at FROM measurement_sessions ORDER BY measured_at LIMIT 1',
+  );
+  if (!first) return;
+
+  const marker = await db.getFirstAsync<{ measured_at: string }>(
+    `SELECT measured_at FROM measurement_sessions
+     WHERE note LIKE '%Начало эксперимента%'
+     ORDER BY measured_at LIMIT 1`,
+  );
+
+  const createdAt = new Date().toISOString();
+
+  await db.runAsync(
+    `INSERT INTO experiment_phases (kind, title, started_at, ended_at, note, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    'clean',
+    'Без всего',
+    first.measured_at,
+    marker?.measured_at ?? null,
+    'Наблюдение без кофе, энергетиков и алкоголя.',
+    createdAt,
+  );
+
+  if (marker) {
+    await db.runAsync(
+      `INSERT INTO experiment_phases (kind, title, started_at, ended_at, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      'coffee',
+      'Кофе',
+      marker.measured_at,
+      null,
+      '1–2 чашки в день.',
+      createdAt,
+    );
+  }
+}
+
+export async function getPhases(db: SQLiteDatabase): Promise<ExperimentPhase[]> {
+  const rows = await db.getAllAsync<PhaseRow>(
+    `SELECT id, kind, title, started_at, ended_at, note
+     FROM experiment_phases
+     ORDER BY started_at DESC`,
+  );
+
+  return rows.map(rowToPhase);
+}
+
+export async function getPhaseById(db: SQLiteDatabase, id: number) {
+  const row = await db.getFirstAsync<PhaseRow>(
+    `SELECT id, kind, title, started_at, ended_at, note
+     FROM experiment_phases
+     WHERE id = ?`,
+    id,
+  );
+
+  return row ? rowToPhase(row) : null;
+}
+
+async function getPhaseStats(db: SQLiteDatabase, phase: ExperimentPhase): Promise<PhaseStats> {
+  const row = await db.getFirstAsync<{
+    count: number;
+    systolic: number | null;
+    diastolic: number | null;
+    pulse: number | null;
+    wellbeing: number | null;
+  }>(
+    `SELECT
+       COUNT(*) AS count,
+       AVG(agg.systolic) AS systolic,
+       AVG(agg.diastolic) AS diastolic,
+       AVG(agg.pulse) AS pulse,
+       AVG(agg.wellbeing) AS wellbeing
+     FROM (
+       SELECT
+         s.wellbeing AS wellbeing,
+         AVG(r.systolic) AS systolic,
+         AVG(r.diastolic) AS diastolic,
+         AVG(r.pulse) AS pulse
+       FROM measurement_sessions s
+       JOIN measurement_readings r ON r.session_id = s.id
+       WHERE s.measured_at >= ? AND (? IS NULL OR s.measured_at < ?)
+       GROUP BY s.id
+     ) agg`,
+    phase.startedAt,
+    phase.endedAt,
+    phase.endedAt,
+  );
+
+  return {
+    count: row?.count ?? 0,
+    systolic: Math.round(row?.systolic ?? 0),
+    diastolic: Math.round(row?.diastolic ?? 0),
+    pulse: Math.round(row?.pulse ?? 0),
+    wellbeing: Math.round((row?.wellbeing ?? 0) * 10) / 10,
+  };
+}
+
+export async function getPhasesWithStats(db: SQLiteDatabase): Promise<PhaseWithStats[]> {
+  const phases = await getPhases(db);
+  const stats = await Promise.all(phases.map((phase) => getPhaseStats(db, phase)));
+
+  return phases.map((phase, index) => ({ ...phase, stats: stats[index] }));
+}
+
+export async function getMeasurementsInPhase(
+  db: SQLiteDatabase,
+  phase: ExperimentPhase,
+): Promise<MeasurementSummary[]> {
+  const rows = await db.getAllAsync<MeasurementRow>(
+    `SELECT
+      s.id,
+      s.measured_at,
+      s.wellbeing,
+      s.tags_json,
+      s.note,
+      s.mode,
+      ROUND(AVG(r.systolic), 1) AS systolic,
+      ROUND(AVG(r.diastolic), 1) AS diastolic,
+      ROUND(AVG(r.pulse), 1) AS pulse,
+      COUNT(r.id) AS reading_count
+     FROM measurement_sessions s
+     JOIN measurement_readings r ON r.session_id = s.id
+     WHERE s.measured_at >= ? AND (? IS NULL OR s.measured_at < ?)
+     GROUP BY s.id
+     ORDER BY s.measured_at DESC`,
+    phase.startedAt,
+    phase.endedAt,
+    phase.endedAt,
+  );
+
+  return rows.map(rowToSummary);
+}
+
+export type PhaseInput = {
+  kind: PhaseKind;
+  title: string;
+  startedAt: string;
+  endedAt: string | null;
+  note: string;
+};
+
+/** Новый период закрывает предыдущий открытый — периоды идут встык, без разрывов и нахлёстов. */
+export async function createPhase(db: SQLiteDatabase, input: PhaseInput) {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE experiment_phases
+       SET ended_at = ?
+       WHERE ended_at IS NULL AND started_at <= ?`,
+      input.startedAt,
+      input.startedAt,
+    );
+
+    await db.runAsync(
+      `INSERT INTO experiment_phases (kind, title, started_at, ended_at, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      input.kind,
+      input.title.trim(),
+      input.startedAt,
+      input.endedAt,
+      input.note.trim(),
+      new Date().toISOString(),
+    );
+  });
+}
+
+export async function updatePhase(db: SQLiteDatabase, id: number, input: PhaseInput) {
+  await db.runAsync(
+    `UPDATE experiment_phases
+     SET kind = ?, title = ?, started_at = ?, ended_at = ?, note = ?
+     WHERE id = ?`,
+    input.kind,
+    input.title.trim(),
+    input.startedAt,
+    input.endedAt,
+    input.note.trim(),
+    id,
+  );
+}
+
+export async function deletePhase(db: SQLiteDatabase, id: number) {
+  await db.runAsync('DELETE FROM experiment_phases WHERE id = ?', id);
 }

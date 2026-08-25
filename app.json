@@ -2,7 +2,7 @@
   "expo": {
     "name": "Давление",
     "slug": "blood-pressure-diary",
-    "version": "0.5.1",
+    "version": "0.7.0",
     "orientation": "portrait",
     "icon": "./assets/images/coral-app-icon.png",
     "scheme": "bloodpressure",
@@ -11,9 +11,11 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.eggplant4287.coral6481",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
       }
     },
     "android": {

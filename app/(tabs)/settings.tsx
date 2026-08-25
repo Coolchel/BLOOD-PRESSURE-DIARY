@@ -1,3 +1,4 @@
+import { useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
@@ -5,13 +6,21 @@ import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as XLSX from '@e965/xlsx';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import type { AppSymbolName } from '@/components/ui/icon-types';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
 import {
+  getLastAutoBackupAt,
+  isAutoBackupEnabled,
+  runAutoBackup,
+  setAutoBackupEnabled,
+} from '@/data/auto-backup';
+import {
+  buildBackupPayload,
   clearMeasurements,
   getMeasurements,
   restoreBackup,
@@ -43,8 +52,69 @@ function SettingsRow({ icon, title, subtitle, destructive, onPress }: SettingsRo
   );
 }
 
+type ToggleRowProps = {
+  icon: AppSymbolName;
+  title: string;
+  subtitle: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+};
+
+function ToggleRow({ icon, title, subtitle, value, onValueChange }: ToggleRowProps) {
+  return (
+    <View style={styles.row}>
+      <View style={[styles.rowIcon, { backgroundColor: Palette.coralSoft }]}>
+        <IconSymbol name={icon} size={21} color={Palette.coral} />
+      </View>
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowSubtitle}>{subtitle}</Text>
+      </View>
+      <Switch
+        ios_backgroundColor="#E4E6EA"
+        onValueChange={onValueChange}
+        thumbColor={Palette.white}
+        trackColor={{ false: '#E4E6EA', true: Palette.coral }}
+        value={value}
+      />
+    </View>
+  );
+}
+
+function formatBackupMoment(date: Date) {
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 export default function SettingsScreen() {
   const db = useSQLiteContext();
+  const [autoBackup, setAutoBackup] = useState(true);
+  const [lastBackup, setLastBackup] = useState<Date | null>(null);
+
+  const refreshAutoBackup = useCallback(async () => {
+    setAutoBackup(await isAutoBackupEnabled(db));
+    setLastBackup(await getLastAutoBackupAt(db));
+  }, [db]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshAutoBackup();
+    }, [refreshAutoBackup]),
+  );
+
+  async function toggleAutoBackup(next: boolean) {
+    setAutoBackup(next);
+    await setAutoBackupEnabled(db, next);
+    void Haptics.selectionAsync();
+
+    if (next && (await runAutoBackup(db)) === 'written') {
+      setLastBackup(new Date());
+    }
+  }
 
   async function shareFile(kind: 'xlsx' | 'json') {
     try {
@@ -61,48 +131,7 @@ export default function SettingsScreen() {
           : new File(Paths.cache, `davlenie-export-${date}.xlsx`);
 
       if (kind === 'json') {
-        const sessions = await db.getAllAsync<{
-          id: number;
-          measured_at: string;
-          wellbeing: number;
-          tags_json: string;
-          note: string;
-          mode: string;
-          created_at: string;
-        }>(
-          `SELECT id, measured_at, wellbeing, tags_json, note, mode, created_at
-           FROM measurement_sessions
-           ORDER BY measured_at DESC`,
-        );
-        const readings = await db.getAllAsync<{
-          session_id: number;
-          systolic: number;
-          diastolic: number;
-          pulse: number;
-          position: number;
-        }>(
-          `SELECT r.session_id, r.systolic, r.diastolic, r.pulse, r.position
-           FROM measurement_readings r
-           JOIN measurement_sessions s ON s.id = r.session_id
-           ORDER BY r.session_id, r.position`,
-        );
-        file.write(
-          JSON.stringify(
-            {
-              app: 'Давление',
-              version: 1,
-              exportedAt: new Date().toISOString(),
-              sessions: sessions.map((session) => ({
-                ...session,
-                tags: JSON.parse(session.tags_json) as string[],
-                tags_json: undefined,
-              })),
-              readings,
-            },
-            null,
-            2,
-          ),
-        );
+        file.write(JSON.stringify(await buildBackupPayload(db), null, 2));
       } else {
         const header = [
           'Дата и время',
@@ -244,6 +273,30 @@ export default function SettingsScreen() {
       <Text style={styles.title}>Настройки</Text>
       <Text style={styles.subtitle}>Все данные хранятся только на этом устройстве</Text>
 
+      <Text style={styles.sectionTitle}>Автоматическая копия</Text>
+      <View style={styles.group}>
+        <ToggleRow
+          icon="arrow.counterclockwise"
+          onValueChange={(next) => void toggleAutoBackup(next)}
+          subtitle="Сохранять JSON в «Файлы» после каждого измерения"
+          title="Копия без напоминаний"
+          value={autoBackup}
+        />
+        <View style={styles.divider} />
+        <View style={styles.autoInfo}>
+          <Text style={styles.autoInfoText}>
+            {!autoBackup
+              ? 'Копии не создаются — данные останутся только внутри приложения'
+              : lastBackup
+                ? `Последняя копия: ${formatBackupMoment(lastBackup)}`
+                : 'Копия появится сразу после первого измерения'}
+          </Text>
+          <Text style={styles.autoInfoHint}>
+            Файлы → На iPhone → Давление. Хранятся текущая копия и семь последних дневных.
+          </Text>
+        </View>
+      </View>
+
       <Text style={styles.sectionTitle}>Экспорт и копия</Text>
       <View style={styles.group}>
         <SettingsRow
@@ -287,7 +340,7 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      <Text style={styles.version}>Давление · версия 0.5.1</Text>
+      <Text style={styles.version}>Давление · версия 0.7.0</Text>
     </ScreenShell>
   );
 }
@@ -363,6 +416,22 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginLeft: 72,
     backgroundColor: Palette.line,
+  },
+  autoInfo: {
+    gap: 5,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 14,
+  },
+  autoInfoText: {
+    color: Palette.text,
+    fontSize: 12.5,
+    fontWeight: '600',
+    lineHeight: 17,
+  },
+  autoInfoHint: {
+    color: Palette.muted,
+    fontSize: 11,
+    lineHeight: 15,
   },
   privacy: {
     padding: Spacing.md,

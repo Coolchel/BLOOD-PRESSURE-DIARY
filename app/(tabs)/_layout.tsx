@@ -53,6 +53,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="phases"
+        options={{
+          title: 'Периоды',
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="testtube.2" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Настройки',

@@ -34,6 +34,8 @@ const MAPPING = {
   'square.and.arrow.down': 'file-download',
   trash: 'delete-outline',
   'arrow.counterclockwise': 'refresh',
+  'square.and.pencil': 'edit',
+  'testtube.2': 'science',
 } as IconMapping;
 
 /**

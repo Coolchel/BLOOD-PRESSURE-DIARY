@@ -6,11 +6,14 @@ import Svg, {
   LinearGradient as SvgGradient,
   Line,
   Path,
+  Rect,
   Stop,
   Text as SvgText,
 } from 'react-native-svg';
 
 import { Palette } from '@/constants/design';
+import type { ExperimentPhase } from '@/types/experiment';
+import { findPhaseFor, phaseKindInfo } from '@/types/experiment';
 import type { MeasurementSummary } from '@/types/measurement';
 
 export type ChartMetric = 'pressure' | 'pulse' | 'wellbeing';
@@ -19,7 +22,51 @@ type WeeklyChartProps = {
   measurements: MeasurementSummary[];
   metric?: ChartMetric;
   maxPoints?: number;
+  phases?: ExperimentPhase[];
 };
+
+type Band = {
+  key: string;
+  start: number;
+  end: number;
+  color: string;
+  soft: string;
+  label: string;
+};
+
+/** Группирует подряд идущие точки одного периода — из них получаются фоновые полосы. */
+function buildBands(points: MeasurementSummary[], phases: ExperimentPhase[]): Band[] {
+  const runs: { id: number; start: number; end: number; label: string }[] = [];
+
+  points.forEach((point, index) => {
+    const phase = findPhaseFor(point.measuredAt, phases);
+    const id = phase?.id ?? -1;
+    const last = runs[runs.length - 1];
+
+    if (last && last.id === id) {
+      last.end = index;
+      return;
+    }
+
+    runs.push({ id, start: index, end: index, label: phase?.title ?? '' });
+  });
+
+  // Точки вне любого периода полосой не закрашиваем.
+  return runs
+    .filter((run) => run.id !== -1)
+    .map((run) => {
+      const info = phaseKindInfo(phases.find((item) => item.id === run.id)?.kind ?? 'clean');
+
+      return {
+        key: `${run.id}-${run.start}`,
+        start: run.start,
+        end: run.end,
+        color: info.color,
+        soft: info.soft,
+        label: run.label,
+      };
+    });
+}
 
 type Series = {
   key: string;
@@ -62,6 +109,7 @@ export function WeeklyChart({
   measurements,
   metric = 'pressure',
   maxPoints,
+  phases,
 }: WeeklyChartProps) {
   const selected = maxPoints ? measurements.slice(0, maxPoints) : measurements;
   const points = selected.slice().reverse();
@@ -125,8 +173,24 @@ export function WeeklyChart({
         (value, index) => `${index === 0 ? 'M' : 'L'} ${xFor(index)} ${yFor(value)}`,
       )
       .join(' ');
-  const labelEvery = Math.max(1, Math.ceil((points.length - 1) / 4));
+  // Чем плотнее точки, тем меньше украшений: иначе линия превращается в кашу.
+  const dense = points.length > 40;
+  const compact = points.length > 14;
+  const dotRadius = dense ? 0 : compact ? 2.2 : 3.8;
+  const labelCount = Math.min(5, points.length);
+  const labelIndexes = new Set(
+    Array.from({ length: labelCount }, (_, position) =>
+      labelCount === 1 ? 0 : Math.round((position * (points.length - 1)) / (labelCount - 1)),
+    ),
+  );
   const unit = metric === 'pressure' ? 'мм' : metric === 'pulse' ? 'уд/м' : 'балл';
+  const bands = phases?.length ? buildBands(points, phases) : [];
+  const bandEdge = (index: number, side: 'left' | 'right') => {
+    if (side === 'left') {
+      return index === 0 ? PLOT_LEFT - 9 : (xFor(index - 1) + xFor(index)) / 2;
+    }
+    return index === points.length - 1 ? PLOT_RIGHT + 9 : (xFor(index) + xFor(index + 1)) / 2;
+  };
 
   return (
     <View>
@@ -149,6 +213,33 @@ export function WeeklyChart({
             <Stop offset="1" stopColor={series[0].color} stopOpacity="0" />
           </SvgGradient>
         </Defs>
+
+        {bands.map((band) => {
+          const left = bandEdge(band.start, 'left');
+          const width = bandEdge(band.end, 'right') - left;
+          return (
+            <G key={band.key}>
+              <Rect
+                fill={band.soft}
+                height={CHART_BOTTOM - CHART_TOP + 18}
+                width={width}
+                x={left}
+                y={CHART_TOP - 10}
+              />
+              <Rect fill={band.color} height={2.5} width={width} x={left} y={CHART_BOTTOM + 6} />
+              {width >= 46 ? (
+                <SvgText
+                  fill={band.color}
+                  fontSize={7.5}
+                  fontWeight="700"
+                  x={left + 5}
+                  y={CHART_TOP - 2}>
+                  {band.label}
+                </SvgText>
+              ) : null}
+            </G>
+          );
+        })}
 
         <SvgText fill={Palette.subtle} fontSize={8} textAnchor="end" x={34} y={10}>
           {unit}
@@ -190,26 +281,26 @@ export function WeeklyChart({
               stroke={item.color}
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeWidth={3}
+              strokeWidth={dense ? 2 : 3}
             />
-            {item.values.map((value, index) => (
-              <Circle
-                cx={xFor(index)}
-                cy={yFor(value)}
-                fill={Palette.white}
-                key={`${item.key}-${points[index].id}`}
-                r={points.length > 14 ? 2.2 : 3.8}
-                stroke={item.color}
-                strokeWidth={points.length > 14 ? 1.6 : 2.4}
-              />
-            ))}
+            {dotRadius > 0
+              ? item.values.map((value, index) => (
+                  <Circle
+                    cx={xFor(index)}
+                    cy={yFor(value)}
+                    fill={Palette.white}
+                    key={`${item.key}-${points[index].id}`}
+                    r={dotRadius}
+                    stroke={item.color}
+                    strokeWidth={compact ? 1.6 : 2.4}
+                  />
+                ))
+              : null}
           </G>
         ))}
 
         {points.map((item, index) => {
-          const shouldLabel =
-            index === 0 || index === points.length - 1 || index % labelEvery === 0;
-          if (!shouldLabel) return null;
+          if (!labelIndexes.has(index)) return null;
           const label = formatAxisDate(item.measuredAt);
           return (
             <G key={`label-${item.id}`}>
@@ -222,14 +313,16 @@ export function WeeklyChart({
                 y={158}>
                 {label.date}
               </SvgText>
-              <SvgText
-                fill={Palette.subtle}
-                fontSize={8}
-                textAnchor="middle"
-                x={xFor(index)}
-                y={172}>
-                {label.time}
-              </SvgText>
+              {compact ? null : (
+                <SvgText
+                  fill={Palette.subtle}
+                  fontSize={8}
+                  textAnchor="middle"
+                  x={xFor(index)}
+                  y={172}>
+                  {label.time}
+                </SvgText>
+              )}
             </G>
           );
         })}

@@ -17,4 +17,6 @@ export type AppSymbolName =
   | 'square.and.arrow.up'
   | 'square.and.arrow.down'
   | 'trash'
-  | 'arrow.counterclockwise';
+  | 'arrow.counterclockwise'
+  | 'square.and.pencil'
+  | 'testtube.2';

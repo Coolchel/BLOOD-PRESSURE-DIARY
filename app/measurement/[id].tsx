@@ -1,13 +1,17 @@
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
-import { getMeasurementById } from '@/data/database';
+import { usePhaseList } from '@/hooks/use-phases';
+import { findPhaseFor, phaseKindInfo } from '@/types/experiment';
+import { runAutoBackup } from '@/data/auto-backup';
+import { getMeasurementById, updateMeasurementNote } from '@/data/database';
 import type { MeasurementDetails } from '@/types/measurement';
 
 function formatDate(iso: string) {
@@ -25,6 +29,31 @@ export default function MeasurementDetailsScreen() {
   const db = useSQLiteContext();
   const [measurement, setMeasurement] = useState<MeasurementDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const phases = usePhaseList();
+
+  function startEditingNote(current: MeasurementDetails) {
+    void Haptics.selectionAsync();
+    setNoteDraft(current.note);
+    setEditingNote(true);
+  }
+
+  async function saveNote(current: MeasurementDetails) {
+    try {
+      setSavingNote(true);
+      await updateMeasurementNote(db, current.id, noteDraft);
+      setMeasurement({ ...current, note: noteDraft.trim() });
+      setEditingNote(false);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void runAutoBackup(db);
+    } catch {
+      Alert.alert('Не получилось сохранить заметку', 'Попробуй ещё раз.');
+    } finally {
+      setSavingNote(false);
+    }
+  }
 
   useEffect(() => {
     const numericId = Number(id);
@@ -78,6 +107,20 @@ export default function MeasurementDetailsScreen() {
         </View>
         <View style={styles.headerSpacer} />
       </View>
+
+      {(() => {
+        const phase = findPhaseFor(measurement.measuredAt, phases);
+        if (!phase) return null;
+        const info = phaseKindInfo(phase.kind);
+        return (
+          <View style={[styles.phaseChip, { backgroundColor: info.soft }]}>
+            <View style={[styles.phaseDot, { backgroundColor: info.color }]} />
+            <Text style={[styles.phaseChipText, { color: info.color }]}>
+              Период: {phase.title}
+            </Text>
+          </View>
+        );
+      })()}
 
       <Text style={styles.sectionLabel}>{isSeries ? 'СРЕДНИЕ ЗНАЧЕНИЯ' : 'ПОКАЗАТЕЛИ'}</Text>
       <GlassCard contentStyle={styles.summaryCard}>
@@ -157,11 +200,61 @@ export default function MeasurementDetailsScreen() {
         </View>
       ) : null}
 
-      <Text style={styles.sectionLabel}>ЗАМЕТКА</Text>
+      <View style={styles.noteHeader}>
+        <Text style={[styles.sectionLabel, styles.noteLabel]}>ЗАМЕТКА</Text>
+        {editingNote ? null : (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={10}
+            onPress={() => startEditingNote(measurement)}
+            style={({ pressed }) => [styles.noteEdit, pressed && styles.notePressed]}>
+            <IconSymbol name="square.and.pencil" size={15} color={Palette.coral} />
+            <Text style={styles.noteEditText}>
+              {measurement.note ? 'Изменить' : 'Добавить'}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
       <View style={styles.noteCard}>
-        <Text style={[styles.noteText, !measurement.note && styles.noteEmpty]}>
-          {measurement.note || 'Заметка не добавлена'}
-        </Text>
+        {editingNote ? (
+          <>
+            <TextInput
+              accessibilityLabel="Заметка к измерению"
+              autoFocus
+              multiline
+              onChangeText={setNoteDraft}
+              placeholder="Например: после прогулки, до приёма лекарства…"
+              placeholderTextColor={Palette.subtle}
+              style={styles.noteInput}
+              textAlignVertical="top"
+              value={noteDraft}
+            />
+            <View style={styles.noteActions}>
+              <Pressable
+                onPress={() => setEditingNote(false)}
+                style={({ pressed }) => [styles.noteButton, pressed && styles.notePressed]}>
+                <Text style={styles.noteCancelText}>Отмена</Text>
+              </Pressable>
+              <Pressable
+                disabled={savingNote}
+                onPress={() => void saveNote(measurement)}
+                style={({ pressed }) => [
+                  styles.noteButton,
+                  styles.noteSaveButton,
+                  pressed && styles.notePressed,
+                ]}>
+                <Text style={styles.noteSaveText}>
+                  {savingNote ? 'Сохраняем…' : 'Сохранить'}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <Text style={[styles.noteText, !measurement.note && styles.noteEmpty]}>
+            {measurement.note || 'Заметка не добавлена'}
+          </Text>
+        )}
       </View>
     </ScreenShell>
   );
@@ -393,6 +486,85 @@ const styles = StyleSheet.create({
   },
   noteEmpty: {
     color: Palette.subtle,
+  },
+  phaseChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginBottom: Spacing.md,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: Radius.pill,
+  },
+  phaseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  phaseChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  noteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  noteLabel: {
+    marginBottom: 0,
+  },
+  noteEdit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    backgroundColor: Palette.coralSoft,
+  },
+  noteEditText: {
+    color: Palette.coral,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  notePressed: {
+    opacity: 0.75,
+  },
+  noteInput: {
+    minHeight: 96,
+    color: Palette.text,
+    fontSize: 14,
+    lineHeight: 21,
+    padding: 0,
+  },
+  noteActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: Spacing.md,
+  },
+  noteButton: {
+    minWidth: 104,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 11,
+    borderRadius: Radius.small,
+    backgroundColor: '#F1F2F6',
+  },
+  noteSaveButton: {
+    backgroundColor: Palette.coral,
+  },
+  noteCancelText: {
+    color: Palette.muted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  noteSaveText: {
+    color: Palette.white,
+    fontSize: 13,
+    fontWeight: '700',
   },
   notFound: {
     alignItems: 'center',
