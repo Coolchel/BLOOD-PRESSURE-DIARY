@@ -8,6 +8,7 @@ import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WeeklyChart } from '@/components/weekly-chart';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
+import { measurementStats } from '@/constants/measurement-stats';
 import { useMeasurements } from '@/hooks/use-measurements';
 
 export default function HomeScreen() {
@@ -16,13 +17,7 @@ export default function HomeScreen() {
   const recent = measurements.slice(0, 7);
   const average =
     recent.length > 0
-      ? {
-          systolic: Math.round(recent.reduce((sum, item) => sum + item.systolic, 0) / recent.length),
-          diastolic: Math.round(
-            recent.reduce((sum, item) => sum + item.diastolic, 0) / recent.length,
-          ),
-          pulse: Math.round(recent.reduce((sum, item) => sum + item.pulse, 0) / recent.length),
-        }
+      ? measurementStats(recent)
       : undefined;
 
   function addMeasurement() {

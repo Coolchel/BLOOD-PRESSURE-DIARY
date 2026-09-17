@@ -85,6 +85,7 @@ export default function NewMeasurementScreen() {
   const [saved, setSaved] = useState(false);
 
   const activeConfig = activeMetric ? metricConfig[activeMetric] : undefined;
+  const seriesFull = mode === 'series' && series.length >= 3;
   const previewReadings = useMemo(() => {
     if (mode === 'series' && isComplete(current)) return [...series, current];
     return mode === 'series' ? series : isComplete(current) ? [current] : [];
@@ -98,7 +99,7 @@ export default function NewMeasurementScreen() {
   }
 
   function updateMetric(value: number) {
-    if (!activeMetric) return;
+    if (!activeMetric || seriesFull) return;
     const metric = activeMetric;
     setCurrent((existing) => ({ ...existing, [metric]: value }));
 
@@ -141,6 +142,7 @@ export default function NewMeasurementScreen() {
   }
 
   async function save() {
+    if (saving) return;
     const readings =
       mode === 'series'
         ? isComplete(current)
@@ -154,8 +156,8 @@ export default function NewMeasurementScreen() {
       Alert.alert('Не хватает данных', 'Укажи систолическое, диастолическое давление и пульс.');
       return;
     }
-    if (mode === 'series' && readings.length < 2) {
-      Alert.alert('Нужно два замера', 'Добавь не менее двух измерений, чтобы сохранить среднее.');
+    if (mode === 'series' && (readings.length < 2 || readings.length > 3)) {
+      Alert.alert('Проверь серию', 'В серии должно быть от двух до трёх замеров.');
       return;
     }
     if (readings.some((reading) => reading.systolic <= reading.diastolic)) {
@@ -216,6 +218,7 @@ export default function NewMeasurementScreen() {
         <Text style={styles.sectionLabel}>ПОКАЗАТЕЛИ</Text>
         <GlassCard contentStyle={styles.metricsCard}>
           <MetricRow
+            disabled={seriesFull}
             icon="arrow.up.circle"
             iconColor={Palette.coral}
             label="Систолическое"
@@ -225,6 +228,7 @@ export default function NewMeasurementScreen() {
           />
           <View style={styles.divider} />
           <MetricRow
+            disabled={seriesFull}
             icon="arrow.down.circle"
             iconColor={Palette.orange}
             label="Диастолическое"
@@ -234,6 +238,7 @@ export default function NewMeasurementScreen() {
           />
           <View style={styles.divider} />
           <MetricRow
+            disabled={seriesFull}
             icon="waveform.path.ecg"
             iconColor="#6D78A8"
             label="Пульс"

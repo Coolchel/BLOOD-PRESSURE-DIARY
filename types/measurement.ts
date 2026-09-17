@@ -23,6 +23,7 @@ export type MeasurementSummary = Reading & {
   note: string;
   mode: MeasurementMode;
   readingCount: number;
+  averages: Reading;
 };
 
 export type MeasurementDetails = MeasurementSummary & {

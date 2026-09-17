@@ -7,13 +7,9 @@ import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WeeklyChart } from '@/components/weekly-chart';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
+import { measurementStats } from '@/constants/measurement-stats';
 import { useMeasurements } from '@/hooks/use-measurements';
 import { usePhaseList } from '@/hooks/use-phases';
-
-function average(values: number[]) {
-  if (!values.length) return 0;
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
-}
 
 type Period = 'week' | 'month' | 'quarter' | 'all';
 
@@ -27,7 +23,7 @@ const PERIODS: { key: Period; label: string; days: number | null }[] = [
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default function StatisticsScreen() {
-  const { measurements: allMeasurements } = useMeasurements(10000);
+  const { measurements: allMeasurements } = useMeasurements(-1);
   const [period, setPeriod] = useState<Period>('week');
   const phases = usePhaseList();
 
@@ -41,7 +37,7 @@ export default function StatisticsScreen() {
   const systolic = measurements.map((item) => item.systolic);
   const diastolic = measurements.map((item) => item.diastolic);
   const pulse = measurements.map((item) => item.pulse);
-  const wellbeing = measurements.map((item) => item.wellbeing);
+  const stats = measurementStats(measurements);
   const hasData = measurements.length > 0;
 
   return (
@@ -117,19 +113,19 @@ export default function StatisticsScreen() {
       <View style={styles.averageGrid}>
         <View style={[styles.averageCard, { backgroundColor: Palette.coralSoft }]}>
           <IconSymbol name="arrow.up.circle" size={22} color={Palette.coral} />
-          <Text style={styles.averageValue}>{hasData ? average(systolic) : '—'}</Text>
+          <Text style={styles.averageValue}>{hasData ? stats.systolic : '—'}</Text>
           <Text style={styles.averageLabel}>Систолическое</Text>
           <Text style={styles.averageUnit}>мм рт. ст.</Text>
         </View>
         <View style={[styles.averageCard, { backgroundColor: Palette.orangeSoft }]}>
           <IconSymbol name="arrow.down.circle" size={22} color={Palette.orange} />
-          <Text style={styles.averageValue}>{hasData ? average(diastolic) : '—'}</Text>
+          <Text style={styles.averageValue}>{hasData ? stats.diastolic : '—'}</Text>
           <Text style={styles.averageLabel}>Диастолическое</Text>
           <Text style={styles.averageUnit}>мм рт. ст.</Text>
         </View>
         <View style={styles.averageCard}>
           <IconSymbol name="waveform.path.ecg" size={22} color="#6D78A8" />
-          <Text style={styles.averageValue}>{hasData ? average(pulse) : '—'}</Text>
+          <Text style={styles.averageValue}>{hasData ? stats.pulse : '—'}</Text>
           <Text style={styles.averageLabel}>Пульс</Text>
           <Text style={styles.averageUnit}>уд/мин</Text>
         </View>
@@ -137,7 +133,7 @@ export default function StatisticsScreen() {
           <View style={styles.numberIcon}>
             <Text style={styles.numberIconText}>10</Text>
           </View>
-          <Text style={styles.averageValue}>{hasData ? average(wellbeing) : '—'}</Text>
+          <Text style={styles.averageValue}>{hasData ? stats.wellbeing : '—'}</Text>
           <Text style={styles.averageLabel}>Самочувствие</Text>
           <Text style={styles.averageUnit}>из 10</Text>
         </View>

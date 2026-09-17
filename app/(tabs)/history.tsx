@@ -1,17 +1,20 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MeasurementCard } from '@/components/measurement-card';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Shadow, Spacing } from '@/constants/design';
+import { pluralRecords } from '@/constants/phase-format';
 import { useMeasurements } from '@/hooks/use-measurements';
 import { usePhaseList } from '@/hooks/use-phases';
 import { findPhaseFor } from '@/types/experiment';
 
 export default function HistoryScreen() {
-  const { measurements, loading } = useMeasurements(200);
+  const [limit, setLimit] = useState(200);
+  const { measurements, loading, total, error, refresh } = useMeasurements(limit);
   const phases = usePhaseList();
 
   return (
@@ -33,10 +36,8 @@ export default function HistoryScreen() {
       </View>
 
       <View style={styles.summary}>
-        <Text style={styles.count}>{measurements.length}</Text>
-        <Text style={styles.countLabel}>
-          {measurements.length === 1 ? 'измерение' : 'измерений'} сохранено
-        </Text>
+        <Text style={styles.count}>{pluralRecords(total)}</Text>
+        <Text style={styles.countLabel}>сохранено</Text>
       </View>
 
       <View style={styles.list}>
@@ -55,7 +56,23 @@ export default function HistoryScreen() {
         ))}
       </View>
 
-      {!loading && measurements.length === 0 ? (
+      {error ? (
+        <Pressable accessibilityRole="button" onPress={() => void refresh()} style={styles.loadMore}>
+          <Text style={styles.emptyText}>Не удалось загрузить записи. Повторить</Text>
+        </Pressable>
+      ) : measurements.length < total ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={loading}
+          onPress={() => setLimit((current) => current + 200)}
+          style={styles.loadMore}>
+          <Text style={styles.emptyText}>
+            {loading ? 'Загружаем…' : `Показать ещё · ${measurements.length} из ${total}`}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {!loading && !error && measurements.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>История пока пустая</Text>
           <Text style={styles.emptyText}>Добавь первое измерение, и оно появится здесь.</Text>
@@ -115,6 +132,10 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 12,
+  },
+  loadMore: {
+    alignItems: 'center',
+    paddingVertical: Spacing.lg,
   },
   empty: {
     alignItems: 'center',

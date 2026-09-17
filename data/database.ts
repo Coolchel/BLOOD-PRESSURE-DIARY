@@ -1,5 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { measurementStats } from '@/constants/measurement-stats';
+
 import type {
   MeasurementDetails,
   MeasurementDraft,
@@ -46,6 +48,7 @@ function rowToSummary(row: MeasurementRow): MeasurementSummary {
     diastolic: Math.round(row.diastolic),
     pulse: Math.round(row.pulse),
     readingCount: row.reading_count,
+    averages: { systolic: row.systolic, diastolic: row.diastolic, pulse: row.pulse },
   };
 }
 
@@ -91,8 +94,6 @@ export async function initializeDatabase(db: SQLiteDatabase) {
     );
   `);
 
-  await seedInitialPhases(db);
-
   // Remove sample rows created by earlier versions without touching real measurements.
   await db.withTransactionAsync(async () => {
     await db.runAsync(
@@ -102,10 +103,15 @@ export async function initializeDatabase(db: SQLiteDatabase) {
        )`,
     );
     await db.runAsync('DELETE FROM measurement_sessions WHERE is_demo = 1');
+    if ((await getSetting(db, 'initial_phases_seeded')) !== 'yes') {
+      await seedInitialPhases(db);
+      await setSetting(db, 'initial_phases_seeded', 'yes');
+    }
   });
 }
 
 export async function addMeasurement(db: SQLiteDatabase, draft: MeasurementDraft) {
+  validateReadings(draft.mode, draft.readings);
   await db.withTransactionAsync(async () => {
     const session = await db.runAsync(
       `INSERT INTO measurement_sessions
@@ -146,14 +152,14 @@ export async function getMeasurements(
       s.tags_json,
       s.note,
       s.mode,
-      ROUND(AVG(r.systolic), 1) AS systolic,
-      ROUND(AVG(r.diastolic), 1) AS diastolic,
-      ROUND(AVG(r.pulse), 1) AS pulse,
+      AVG(r.systolic) AS systolic,
+      AVG(r.diastolic) AS diastolic,
+      AVG(r.pulse) AS pulse,
       COUNT(r.id) AS reading_count
      FROM measurement_sessions s
      JOIN measurement_readings r ON r.session_id = s.id
      GROUP BY s.id
-     ORDER BY s.measured_at DESC
+     ORDER BY s.measured_at DESC, s.id DESC
      LIMIT ?`,
     limit,
   );
@@ -173,9 +179,9 @@ export async function getMeasurementById(
       s.tags_json,
       s.note,
       s.mode,
-      ROUND(AVG(r.systolic), 1) AS systolic,
-      ROUND(AVG(r.diastolic), 1) AS diastolic,
-      ROUND(AVG(r.pulse), 1) AS pulse,
+      AVG(r.systolic) AS systolic,
+      AVG(r.diastolic) AS diastolic,
+      AVG(r.pulse) AS pulse,
       COUNT(r.id) AS reading_count
      FROM measurement_sessions s
      JOIN measurement_readings r ON r.session_id = s.id
@@ -219,6 +225,51 @@ type BackupReading = Reading & {
   position: number;
 };
 
+function record(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('invalid object');
+  }
+  return value as Record<string, unknown>;
+}
+
+function backupDate(value: unknown): string {
+  if (typeof value !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
+      Number.isNaN(Date.parse(value))) {
+    throw new Error('invalid date');
+  }
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  const calendarDate = new Date(0);
+  calendarDate.setUTCFullYear(year, month - 1, day);
+  if (calendarDate.getUTCMonth() !== month - 1 || calendarDate.getUTCDate() !== day) {
+    throw new Error('invalid date');
+  }
+  return new Date(value).toISOString();
+}
+
+function createdAt(value: unknown): string {
+  return value === undefined || value === '' ? new Date().toISOString() : backupDate(value);
+}
+
+function validReading(reading: Reading) {
+  return (
+    Number.isInteger(reading.systolic) && reading.systolic >= 60 && reading.systolic <= 260 &&
+    Number.isInteger(reading.diastolic) && reading.diastolic >= 35 && reading.diastolic <= 160 &&
+    reading.systolic > reading.diastolic &&
+    Number.isInteger(reading.pulse) && reading.pulse >= 30 && reading.pulse <= 220
+  );
+}
+
+function validateReadings(mode: MeasurementDraft['mode'], readings: Reading[]) {
+  if (
+    (mode !== 'single' && mode !== 'series') ||
+    (mode === 'single' ? readings.length !== 1 : readings.length < 2 || readings.length > 3) ||
+    readings.some((reading) => !validReading(reading))
+  ) {
+    throw new Error('invalid readings');
+  }
+}
+
 function parseBackup(payload: unknown) {
   if (!payload || typeof payload !== 'object') throw new Error('invalid backup');
   const value = payload as Record<string, unknown>;
@@ -227,42 +278,68 @@ function parseBackup(payload: unknown) {
     throw new Error('incomplete backup');
   }
 
-  const sessions = value.sessions as BackupSession[];
-  const readings = value.readings as BackupReading[];
-  if (!sessions.length || !readings.length) throw new Error('empty backup');
-
-  for (const session of sessions) {
+  if (!value.sessions.length || !value.readings.length) throw new Error('empty backup');
+  const sessions = value.sessions.map((item): BackupSession => {
+    const session = record(item);
     if (
-      !Number.isInteger(session.id) ||
-      Number.isNaN(Date.parse(session.measured_at)) ||
-      !Number.isInteger(session.wellbeing) ||
+      typeof session.id !== 'number' || !Number.isSafeInteger(session.id) || session.id <= 0 ||
+      typeof session.wellbeing !== 'number' || !Number.isInteger(session.wellbeing) ||
       session.wellbeing < 1 ||
       session.wellbeing > 10 ||
       !Array.isArray(session.tags) ||
+      !session.tags.every((tag) => typeof tag === 'string') ||
       typeof session.note !== 'string' ||
       (session.mode !== 'single' && session.mode !== 'series')
     ) {
       throw new Error('invalid session');
     }
-  }
+    return {
+      id: session.id,
+      measured_at: backupDate(session.measured_at),
+      wellbeing: session.wellbeing,
+      tags: session.tags,
+      note: session.note,
+      mode: session.mode,
+      created_at: createdAt(session.created_at),
+    };
+  });
 
   const sessionIds = new Set(sessions.map((session) => session.id));
-  for (const reading of readings) {
+  if (sessionIds.size !== sessions.length) throw new Error('duplicate sessions');
+  const readings = value.readings.map((item): BackupReading => {
+    const reading = record(item);
     if (
+      typeof reading.session_id !== 'number' ||
       !sessionIds.has(reading.session_id) ||
-      !Number.isInteger(reading.systolic) ||
-      reading.systolic < 60 ||
-      reading.systolic > 260 ||
-      !Number.isInteger(reading.diastolic) ||
-      reading.diastolic < 35 ||
-      reading.diastolic > 160 ||
-      !Number.isInteger(reading.pulse) ||
-      reading.pulse < 30 ||
-      reading.pulse > 220 ||
-      !Number.isInteger(reading.position) ||
+      typeof reading.systolic !== 'number' ||
+      typeof reading.diastolic !== 'number' ||
+      typeof reading.pulse !== 'number' ||
+      typeof reading.position !== 'number' || !Number.isInteger(reading.position) ||
       reading.position < 0
     ) {
       throw new Error('invalid reading');
+    }
+    const parsed = {
+      session_id: reading.session_id,
+      systolic: reading.systolic,
+      diastolic: reading.diastolic,
+      pulse: reading.pulse,
+      position: reading.position,
+    };
+    if (!validReading(parsed)) throw new Error('invalid reading');
+    return parsed;
+  });
+  const grouped = new Map<number, BackupReading[]>();
+  for (const reading of readings) {
+    const group = grouped.get(reading.session_id) ?? [];
+    group.push(reading);
+    grouped.set(reading.session_id, group);
+  }
+  for (const session of sessions) {
+    const group = (grouped.get(session.id) ?? []).sort((a, b) => a.position - b.position);
+    validateReadings(session.mode, group);
+    if (group.some((reading, index) => reading.position !== index)) {
+      throw new Error('invalid reading positions');
     }
   }
 
@@ -271,21 +348,38 @@ function parseBackup(payload: unknown) {
   if (value.phases !== undefined) {
     if (!Array.isArray(value.phases)) throw new Error('invalid phases');
 
-    phases = (value.phases as BackupPhase[]).map((phase) => ({
-      ...phase,
-      ended_at: phase.ended_at ?? null,
-    }));
-
-    for (const phase of phases) {
+    phases = value.phases.map((item): BackupPhase => {
+      const phase = record(item);
       if (
-        !Number.isInteger(phase.id) ||
-        typeof phase.title !== 'string' ||
+        typeof phase.id !== 'number' || !Number.isSafeInteger(phase.id) || phase.id <= 0 ||
+        typeof phase.title !== 'string' || !phase.title.trim() ||
         typeof phase.note !== 'string' ||
-        !PHASE_KIND_VALUES.some((kind) => kind === phase.kind) ||
-        Number.isNaN(Date.parse(phase.started_at)) ||
-        (phase.ended_at !== null && Number.isNaN(Date.parse(phase.ended_at)))
+        !PHASE_KIND_VALUES.some((kind) => kind === phase.kind)
       ) {
         throw new Error('invalid phase');
+      }
+      const parsed = {
+        id: phase.id,
+        kind: phase.kind as PhaseKind,
+        title: phase.title,
+        note: phase.note,
+        started_at: backupDate(phase.started_at),
+        ended_at: phase.ended_at == null ? null : backupDate(phase.ended_at),
+        created_at: createdAt(phase.created_at),
+      };
+      if (parsed.ended_at !== null && parsed.ended_at <= parsed.started_at) {
+        throw new Error('invalid phase range');
+      }
+      return parsed;
+    });
+    if (new Set(phases.map((phase) => phase.id)).size !== phases.length) {
+      throw new Error('duplicate phases');
+    }
+    const ordered = phases.slice().sort((a, b) => a.started_at.localeCompare(b.started_at));
+    for (let index = 1; index < ordered.length; index += 1) {
+      const previous = ordered[index - 1];
+      if (previous.ended_at === null || previous.ended_at > ordered[index].started_at) {
+        throw new PhaseOverlapError();
       }
     }
   }
@@ -347,6 +441,7 @@ export async function restoreBackup(db: SQLiteDatabase, payload: unknown) {
         );
       }
     }
+    await setSetting(db, 'initial_phases_seeded', 'yes');
   });
 
   return { sessions: backup.sessions.length, phases: backup.phases?.length ?? null };
@@ -505,16 +600,18 @@ async function seedInitialPhases(db: SQLiteDatabase) {
 
   const createdAt = new Date().toISOString();
 
-  await db.runAsync(
-    `INSERT INTO experiment_phases (kind, title, started_at, ended_at, note, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    'clean',
-    'Без всего',
-    first.measured_at,
-    marker?.measured_at ?? null,
-    'Наблюдение без кофе, энергетиков и алкоголя.',
-    createdAt,
-  );
+  if (!marker || marker.measured_at > first.measured_at) {
+    await db.runAsync(
+      `INSERT INTO experiment_phases (kind, title, started_at, ended_at, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      'clean',
+      'Без всего',
+      first.measured_at,
+      marker?.measured_at ?? null,
+      'Наблюдение без кофе, энергетиков и алкоголя.',
+      createdAt,
+    );
+  }
 
   if (marker) {
     await db.runAsync(
@@ -552,42 +649,7 @@ export async function getPhaseById(db: SQLiteDatabase, id: number) {
 }
 
 async function getPhaseStats(db: SQLiteDatabase, phase: ExperimentPhase): Promise<PhaseStats> {
-  const row = await db.getFirstAsync<{
-    count: number;
-    systolic: number | null;
-    diastolic: number | null;
-    pulse: number | null;
-    wellbeing: number | null;
-  }>(
-    `SELECT
-       COUNT(*) AS count,
-       AVG(agg.systolic) AS systolic,
-       AVG(agg.diastolic) AS diastolic,
-       AVG(agg.pulse) AS pulse,
-       AVG(agg.wellbeing) AS wellbeing
-     FROM (
-       SELECT
-         s.wellbeing AS wellbeing,
-         AVG(r.systolic) AS systolic,
-         AVG(r.diastolic) AS diastolic,
-         AVG(r.pulse) AS pulse
-       FROM measurement_sessions s
-       JOIN measurement_readings r ON r.session_id = s.id
-       WHERE s.measured_at >= ? AND (? IS NULL OR s.measured_at < ?)
-       GROUP BY s.id
-     ) agg`,
-    phase.startedAt,
-    phase.endedAt,
-    phase.endedAt,
-  );
-
-  return {
-    count: row?.count ?? 0,
-    systolic: Math.round(row?.systolic ?? 0),
-    diastolic: Math.round(row?.diastolic ?? 0),
-    pulse: Math.round(row?.pulse ?? 0),
-    wellbeing: Math.round((row?.wellbeing ?? 0) * 10) / 10,
-  };
+  return measurementStats(await getMeasurementsInPhase(db, phase));
 }
 
 export async function getPhasesWithStats(db: SQLiteDatabase): Promise<PhaseWithStats[]> {
@@ -609,15 +671,15 @@ export async function getMeasurementsInPhase(
       s.tags_json,
       s.note,
       s.mode,
-      ROUND(AVG(r.systolic), 1) AS systolic,
-      ROUND(AVG(r.diastolic), 1) AS diastolic,
-      ROUND(AVG(r.pulse), 1) AS pulse,
+      AVG(r.systolic) AS systolic,
+      AVG(r.diastolic) AS diastolic,
+      AVG(r.pulse) AS pulse,
       COUNT(r.id) AS reading_count
      FROM measurement_sessions s
      JOIN measurement_readings r ON r.session_id = s.id
      WHERE s.measured_at >= ? AND (? IS NULL OR s.measured_at < ?)
      GROUP BY s.id
-     ORDER BY s.measured_at DESC`,
+     ORDER BY s.measured_at DESC, s.id DESC`,
     phase.startedAt,
     phase.endedAt,
     phase.endedAt,
@@ -634,16 +696,47 @@ export type PhaseInput = {
   note: string;
 };
 
-/** Новый период закрывает предыдущий открытый — периоды идут встык, без разрывов и нахлёстов. */
+export class PhaseOverlapError extends Error {
+  constructor() {
+    super('Даты пересекаются с другим периодом. Измени начало или окончание периода.');
+    this.name = 'PhaseOverlapError';
+  }
+}
+
+function normalizedPhase(input: PhaseInput): PhaseInput {
+  const startedAt = backupDate(input.startedAt);
+  const endedAt = input.endedAt === null ? null : backupDate(input.endedAt);
+  if (!input.title.trim() || !PHASE_KIND_VALUES.includes(input.kind) ||
+      (endedAt !== null && endedAt <= startedAt)) {
+    throw new Error('invalid phase');
+  }
+  return { ...input, startedAt, endedAt };
+}
+
+function overlaps(input: PhaseInput, phase: ExperimentPhase) {
+  return (input.endedAt === null || phase.startedAt < input.endedAt) &&
+    (phase.endedAt === null || input.startedAt < phase.endedAt);
+}
+
+/** Новый период может закрыть предыдущий открытый, но не пересекать остальные. */
 export async function createPhase(db: SQLiteDatabase, input: PhaseInput) {
+  input = normalizedPhase(input);
   await db.withTransactionAsync(async () => {
-    await db.runAsync(
-      `UPDATE experiment_phases
-       SET ended_at = ?
-       WHERE ended_at IS NULL AND started_at <= ?`,
-      input.startedAt,
-      input.startedAt,
-    );
+    const phases = await getPhases(db);
+    const previous = phases.find((phase) => phase.endedAt === null && phase.startedAt < input.startedAt);
+    if (phases.some((phase) => overlaps(input,
+      phase.id === previous?.id ? { ...phase, endedAt: input.startedAt } : phase))) {
+      throw new PhaseOverlapError();
+    }
+    if (previous) {
+      await db.runAsync(
+        `UPDATE experiment_phases
+         SET ended_at = ?
+         WHERE id = ?`,
+        input.startedAt,
+        previous.id,
+      );
+    }
 
     await db.runAsync(
       `INSERT INTO experiment_phases (kind, title, started_at, ended_at, note, created_at)
@@ -659,17 +752,23 @@ export async function createPhase(db: SQLiteDatabase, input: PhaseInput) {
 }
 
 export async function updatePhase(db: SQLiteDatabase, id: number, input: PhaseInput) {
-  await db.runAsync(
-    `UPDATE experiment_phases
-     SET kind = ?, title = ?, started_at = ?, ended_at = ?, note = ?
-     WHERE id = ?`,
-    input.kind,
-    input.title.trim(),
-    input.startedAt,
-    input.endedAt,
-    input.note.trim(),
-    id,
-  );
+  input = normalizedPhase(input);
+  await db.withTransactionAsync(async () => {
+    if ((await getPhases(db)).some((phase) => phase.id !== id && overlaps(input, phase))) {
+      throw new PhaseOverlapError();
+    }
+    await db.runAsync(
+      `UPDATE experiment_phases
+       SET kind = ?, title = ?, started_at = ?, ended_at = ?, note = ?
+       WHERE id = ?`,
+      input.kind,
+      input.title.trim(),
+      input.startedAt,
+      input.endedAt,
+      input.note.trim(),
+      id,
+    );
+  });
 }
 
 export async function deletePhase(db: SQLiteDatabase, id: number) {

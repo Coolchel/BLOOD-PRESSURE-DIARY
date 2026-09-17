@@ -19,7 +19,8 @@ import { GlassCard } from '@/components/glass-card';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
-import { createPhase, deletePhase, getPhaseById, updatePhase } from '@/data/database';
+import { getPhaseById, PhaseOverlapError } from '@/data/database';
+import { removePhase, savePhase } from '@/data/phase-actions';
 import type { PhaseKind } from '@/types/experiment';
 import { PHASE_KINDS, phaseKindInfo } from '@/types/experiment';
 
@@ -103,15 +104,11 @@ export default function PhaseEditorScreen() {
 
     try {
       setSaving(true);
-      if (isEditing && editingId !== null) {
-        await updatePhase(db, editingId, input);
-      } else {
-        await createPhase(db, input);
-      }
+      await savePhase(db, input, isEditing ? editingId : null);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
-    } catch {
-      Alert.alert('Не получилось сохранить', 'Попробуй ещё раз.');
+    } catch (error) {
+      Alert.alert('Не получилось сохранить', error instanceof PhaseOverlapError ? error.message : 'Попробуй ещё раз.');
       setSaving(false);
     }
   }
@@ -128,7 +125,7 @@ export default function PhaseEditorScreen() {
           text: 'Удалить',
           style: 'destructive',
           onPress: async () => {
-            await deletePhase(db, editingId);
+            await removePhase(db, editingId);
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             router.back();
           },

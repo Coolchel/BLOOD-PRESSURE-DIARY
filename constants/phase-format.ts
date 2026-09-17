@@ -42,12 +42,19 @@ export function cleanBaseline(phases: PhaseWithStats[]): PhaseStats | null {
   const weighted = (pick: (stats: PhaseStats) => number) =>
     clean.reduce((sum, phase) => sum + pick(phase.stats) * phase.stats.count, 0) / total;
 
+  const averages = {
+    systolic: weighted((stats) => stats.averages.systolic),
+    diastolic: weighted((stats) => stats.averages.diastolic),
+    pulse: weighted((stats) => stats.averages.pulse),
+    wellbeing: weighted((stats) => stats.averages.wellbeing),
+  };
   return {
     count: total,
-    systolic: Math.round(weighted((stats) => stats.systolic)),
-    diastolic: Math.round(weighted((stats) => stats.diastolic)),
-    pulse: Math.round(weighted((stats) => stats.pulse)),
-    wellbeing: Math.round(weighted((stats) => stats.wellbeing) * 10) / 10,
+    systolic: Math.round(averages.systolic),
+    diastolic: Math.round(averages.diastolic),
+    pulse: Math.round(averages.pulse),
+    wellbeing: Math.round(averages.wellbeing * 10) / 10,
+    averages,
   };
 }
 

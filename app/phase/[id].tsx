@@ -10,6 +10,7 @@ import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WeeklyChart } from '@/components/weekly-chart';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
+import { measurementStats } from '@/constants/measurement-stats';
 import {
   formatPhaseRange,
   phaseDays,
@@ -20,11 +21,6 @@ import { getMeasurementsInPhase, getPhaseById } from '@/data/database';
 import type { ExperimentPhase } from '@/types/experiment';
 import { phaseKindInfo } from '@/types/experiment';
 import type { MeasurementSummary } from '@/types/measurement';
-
-function average(values: number[]) {
-  if (!values.length) return 0;
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
-}
 
 export default function PhaseDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -79,6 +75,7 @@ export default function PhaseDetailsScreen() {
 
   const info = phaseKindInfo(phase.kind);
   const hasData = measurements.length > 0;
+  const stats = measurementStats(measurements);
 
   return (
     <ScreenShell contentContainerStyle={styles.content}>
@@ -126,13 +123,13 @@ export default function PhaseDetailsScreen() {
         <View style={styles.statsRow}>
           <View style={[styles.stat, { backgroundColor: Palette.coralSoft }]}>
             <Text style={styles.statValue}>
-              {hasData ? average(measurements.map((item) => item.systolic)) : '—'}
+              {hasData ? stats.systolic : '—'}
             </Text>
             <Text style={styles.statLabel}>Систолическое</Text>
           </View>
           <View style={[styles.stat, { backgroundColor: Palette.orangeSoft }]}>
             <Text style={styles.statValue}>
-              {hasData ? average(measurements.map((item) => item.diastolic)) : '—'}
+              {hasData ? stats.diastolic : '—'}
             </Text>
             <Text style={styles.statLabel}>Диастолическое</Text>
           </View>
@@ -140,13 +137,13 @@ export default function PhaseDetailsScreen() {
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>
-              {hasData ? average(measurements.map((item) => item.pulse)) : '—'}
+              {hasData ? stats.pulse : '—'}
             </Text>
             <Text style={styles.statLabel}>Пульс</Text>
           </View>
           <View style={[styles.stat, { backgroundColor: '#FFF8E9' }]}>
             <Text style={styles.statValue}>
-              {hasData ? average(measurements.map((item) => item.wellbeing)) : '—'}
+              {hasData ? stats.wellbeing : '—'}
             </Text>
             <Text style={styles.statLabel}>Самочувствие</Text>
           </View>

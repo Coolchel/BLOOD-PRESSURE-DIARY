@@ -11,15 +11,18 @@ type MetricRowProps = {
   value?: number;
   unit: string;
   onPress: () => void;
+  disabled?: boolean;
 };
 
-export function MetricRow({ icon, iconColor, label, value, unit, onPress }: MetricRowProps) {
+export function MetricRow({ icon, iconColor, label, value, unit, onPress, disabled }: MetricRowProps) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       accessibilityLabel={`${label}. ${value ?? 'Добавить'}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.row, disabled && { opacity: 0.5 }, pressed && styles.pressed]}>
       <View style={[styles.icon, { backgroundColor: `${iconColor}14` }]}>
         <IconSymbol name={icon} size={23} color={iconColor} weight="semibold" />
       </View>
@@ -80,4 +83,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 });
-

@@ -15,6 +15,7 @@ export type PhaseStats = {
   diastolic: number;
   pulse: number;
   wellbeing: number;
+  averages: { systolic: number; diastolic: number; pulse: number; wellbeing: number };
 };
 
 export type PhaseWithStats = ExperimentPhase & { stats: PhaseStats };

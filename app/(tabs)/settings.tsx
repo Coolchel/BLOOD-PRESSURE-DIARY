@@ -13,6 +13,7 @@ import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import type { AppSymbolName } from '@/components/ui/icon-types';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
+import { measurementStats } from '@/constants/measurement-stats';
 import {
   getLastAutoBackupAt,
   isAutoBackupEnabled,
@@ -120,7 +121,7 @@ export default function SettingsScreen() {
 
   async function shareFile(kind: 'xlsx' | 'json') {
     try {
-      const measurements = await getMeasurements(db, 10000);
+      const measurements = await getMeasurements(db, -1);
       if (!measurements.length) {
         Alert.alert('Нет данных для экспорта', 'Сначала сохрани хотя бы одно своё измерение.');
         return;
@@ -201,10 +202,7 @@ export default function SettingsScreen() {
             const inside = measurements.filter((item) =>
               isInsidePhase(item.measuredAt, phase),
             );
-            const mean = (pick: (item: (typeof inside)[number]) => number) =>
-              inside.length
-                ? Math.round(inside.reduce((sum, item) => sum + pick(item), 0) / inside.length)
-                : '';
+            const stats = measurementStats(inside);
 
             return [
               phase.title,
@@ -212,10 +210,10 @@ export default function SettingsScreen() {
               new Date(phase.startedAt),
               phase.endedAt ? new Date(phase.endedAt) : 'продолжается',
               inside.length,
-              mean((item) => item.systolic),
-              mean((item) => item.diastolic),
-              mean((item) => item.pulse),
-              mean((item) => item.wellbeing),
+              inside.length ? stats.systolic : '',
+              inside.length ? stats.diastolic : '',
+              inside.length ? stats.pulse : '',
+              inside.length ? stats.wellbeing : '',
               phase.note,
             ];
           });
