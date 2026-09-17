@@ -1,5 +1,17 @@
 export type MeasurementMode = 'single' | 'series';
 
+export type MeasurementSort =
+  | 'newest' | 'oldest'
+  | 'systolic-desc' | 'systolic-asc'
+  | 'diastolic-desc' | 'diastolic-asc'
+  | 'pulse-desc' | 'pulse-asc';
+
+export type MeasurementQuery = {
+  sort?: MeasurementSort;
+  from?: string;
+  until?: string;
+};
+
 export type Reading = {
   systolic: number;
   diastolic: number;

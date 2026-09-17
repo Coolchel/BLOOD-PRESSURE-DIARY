@@ -347,7 +347,7 @@ export default function PhaseEditorScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingTop: 16,
-    paddingBottom: 60,
+    paddingBottom: 30,
   },
   header: {
     flexDirection: 'row',

@@ -7,7 +7,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CoralBackground } from '@/components/coral-background';
 import { Palette, Spacing } from '@/constants/design';
@@ -18,13 +18,16 @@ type ScreenShellProps = PropsWithChildren<{
 }>;
 
 export function ScreenShell({ children, scroll = true, contentContainerStyle }: ScreenShellProps) {
+  const insets = useSafeAreaInsets();
+  const bottomSpacing = StyleSheet.flatten(contentContainerStyle)?.paddingBottom ?? styles.scrollContent.paddingBottom;
+  const safeBottomSpacing = typeof bottomSpacing === 'number' ? Math.max(bottomSpacing, insets.bottom) : bottomSpacing;
   const content = scroll ? (
     <ScrollView
       automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={[styles.scrollContent, contentContainerStyle]}>
+      contentContainerStyle={[styles.scrollContent, contentContainerStyle, { paddingBottom: safeBottomSpacing }]}>
       {children}
     </ScrollView>
   ) : (
@@ -56,6 +59,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.screen,
     paddingTop: Spacing.sm,
-    paddingBottom: 152,
+    paddingBottom: 80,
   },
 });

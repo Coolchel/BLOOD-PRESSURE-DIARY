@@ -5,6 +5,8 @@ import { measurementStats } from '@/constants/measurement-stats';
 import type {
   MeasurementDetails,
   MeasurementDraft,
+  MeasurementQuery,
+  MeasurementSort,
   MeasurementSummary,
   Reading,
 } from '@/types/measurement';
@@ -143,7 +145,18 @@ export async function addMeasurement(db: SQLiteDatabase, draft: MeasurementDraft
 export async function getMeasurements(
   db: SQLiteDatabase,
   limit = 60,
+  query: MeasurementQuery = {},
 ): Promise<MeasurementSummary[]> {
+  const orders: Record<MeasurementSort, string> = {
+    newest: 's.measured_at DESC, s.id DESC',
+    oldest: 's.measured_at ASC, s.id ASC',
+    'systolic-desc': 'AVG(r.systolic) DESC, s.measured_at DESC, s.id DESC',
+    'systolic-asc': 'AVG(r.systolic) ASC, s.measured_at DESC, s.id DESC',
+    'diastolic-desc': 'AVG(r.diastolic) DESC, s.measured_at DESC, s.id DESC',
+    'diastolic-asc': 'AVG(r.diastolic) ASC, s.measured_at DESC, s.id DESC',
+    'pulse-desc': 'AVG(r.pulse) DESC, s.measured_at DESC, s.id DESC',
+    'pulse-asc': 'AVG(r.pulse) ASC, s.measured_at DESC, s.id DESC',
+  };
   const rows = await db.getAllAsync<MeasurementRow>(
     `SELECT
       s.id,
@@ -158,9 +171,14 @@ export async function getMeasurements(
       COUNT(r.id) AS reading_count
      FROM measurement_sessions s
      JOIN measurement_readings r ON r.session_id = s.id
+     WHERE (? IS NULL OR s.measured_at >= ?) AND (? IS NULL OR s.measured_at < ?)
      GROUP BY s.id
-     ORDER BY s.measured_at DESC, s.id DESC
+     ORDER BY ${orders[query.sort ?? 'newest'] ?? orders.newest}
      LIMIT ?`,
+    query.from ?? null,
+    query.from ?? null,
+    query.until ?? null,
+    query.until ?? null,
     limit,
   );
 
@@ -469,9 +487,14 @@ export async function updateMeasurementNote(db: SQLiteDatabase, id: number, note
   await db.runAsync('UPDATE measurement_sessions SET note = ? WHERE id = ?', note.trim(), id);
 }
 
-export async function countMeasurements(db: SQLiteDatabase) {
+export async function countMeasurements(db: SQLiteDatabase, query: MeasurementQuery = {}) {
   const row = await db.getFirstAsync<{ total: number }>(
-    'SELECT COUNT(*) AS total FROM measurement_sessions',
+    `SELECT COUNT(*) AS total FROM measurement_sessions
+     WHERE (? IS NULL OR measured_at >= ?) AND (? IS NULL OR measured_at < ?)`,
+    query.from ?? null,
+    query.from ?? null,
+    query.until ?? null,
+    query.until ?? null,
   );
 
   return row?.total ?? 0;

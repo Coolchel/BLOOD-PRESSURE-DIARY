@@ -11,6 +11,7 @@ export type AppSymbolName =
   | 'chevron.right'
   | 'plus'
   | 'ellipsis'
+  | 'line.3.horizontal.decrease'
   | 'delete.left'
   | 'checkmark'
   | 'xmark'

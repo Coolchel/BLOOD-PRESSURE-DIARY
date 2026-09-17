@@ -12,9 +12,9 @@ import { measurementStats } from '@/constants/measurement-stats';
 import { useMeasurements } from '@/hooks/use-measurements';
 
 export default function HomeScreen() {
-  const { measurements, loading } = useMeasurements(30);
+  const { measurements, loading } = useMeasurements(12);
   const latest = measurements[0];
-  const recent = measurements.slice(0, 7);
+  const recent = measurements;
   const average =
     recent.length > 0
       ? measurementStats(recent)
@@ -74,12 +74,12 @@ export default function HomeScreen() {
         <Text style={styles.sectionMeta}>{recent.length} измерений</Text>
       </View>
       <GlassCard contentStyle={styles.chartCard}>
-        <WeeklyChart maxPoints={7} measurements={measurements} />
+        <WeeklyChart maxPoints={12} measurements={recent} />
       </GlassCard>
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Средние значения</Text>
-        <Text style={styles.sectionMeta}>последние 7</Text>
+        <Text style={styles.sectionMeta}>последние {recent.length || 12}</Text>
       </View>
       <View style={styles.statsRow}>
         <View style={[styles.statCard, styles.statCoral]}>

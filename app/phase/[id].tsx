@@ -190,7 +190,7 @@ export default function PhaseDetailsScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingTop: 14,
-    paddingBottom: 48,
+    paddingBottom: 24,
   },
   loading: {
     color: Palette.muted,

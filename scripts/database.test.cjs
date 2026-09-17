@@ -41,6 +41,7 @@ const { cleanBaseline } = loadTS('constants/phase-format.ts');
 const { findPhaseFor } = loadTS('types/experiment.ts');
 const { savePhase, removePhase } = loadTS('data/phase-actions.ts');
 const { setAutoBackupEnabled } = loadTS('data/auto-backup.ts');
+const { DEFAULT_HISTORY_FILTERS, historyQuery } = loadTS('constants/history-filters.ts');
 const iso = (day) => `2026-09-${String(day).padStart(2, '0')}T12:00:00.000Z`;
 const reading = (systolic = 120) => ({ systolic, diastolic: 80, pulse: 70 });
 const draft = (day = 10, readings = [reading()], wellbeing = 7) => ({
@@ -79,7 +80,9 @@ async function snapshot(db) {
 
 test('history can reveal all 450 records, including equal timestamps, with the full count', async (t) => {
   const db = await fixture(t);
-  for (let index = 0; index < 450; index += 1) await api.addMeasurement(db, draft());
+  for (let index = 0; index < 450; index += 1) {
+    await api.addMeasurement(db, draft(10, [reading(index === 0 ? 200 : 120)]));
+  }
   assert.equal(await api.countMeasurements(db), 450);
   const first = await api.getMeasurements(db, 200);
   const second = await api.getMeasurements(db, 400);
@@ -92,6 +95,10 @@ test('history can reveal all 450 records, including equal timestamps, with the f
   assert.equal(new Set(all.map((item) => item.id)).size, 450);
   assert.equal(all[0].id, 450);
   assert.equal(all[449].id, 1);
+  // The highest value belongs to a record outside the first page in chronological order.
+  const sorted = await api.getMeasurements(db, 200, { sort: 'systolic-desc' });
+  assert.equal(sorted[0].id, 1);
+  assert.equal(sorted.length, 200);
 });
 
 test('new periods close an open predecessor and boundary measurements belong to one period', async (t) => {
@@ -299,4 +306,55 @@ test('a copy failure does not prevent a period from being saved', async (t) => {
     console.error = originalConsoleError;
   }
   assert.equal((await api.getPhases(db)).length, 1);
+});
+
+test('history supports both date orders and high/low sorting independently for all three metrics', async (t) => {
+  const db = await fixture(t);
+  await api.addMeasurement(db, draft(10, [{ systolic: 140, diastolic: 80, pulse: 60 }]));
+  await api.addMeasurement(db, draft(11, [{ systolic: 120, diastolic: 95, pulse: 90 }]));
+  await api.addMeasurement(db, draft(12, [
+    { systolic: 160, diastolic: 70, pulse: 75 },
+    { systolic: 100, diastolic: 70, pulse: 75 },
+  ]));
+  const expected = {
+    newest: [3, 2, 1], oldest: [1, 2, 3],
+    'systolic-desc': [1, 3, 2], 'systolic-asc': [2, 3, 1],
+    'diastolic-desc': [2, 1, 3], 'diastolic-asc': [3, 1, 2],
+    'pulse-desc': [2, 3, 1], 'pulse-asc': [1, 3, 2],
+  };
+  for (const [sort, ids] of Object.entries(expected)) {
+    assert.deepEqual((await api.getMeasurements(db, -1, { sort })).map((item) => item.id), ids, sort);
+  }
+});
+
+test('history date filtering includes both selected days, excludes adjacent days and counts only matches', async (t) => {
+  const db = await fixture(t);
+  const start = new Date(2026, 8, 10);
+  const end = new Date(2026, 8, 11);
+  const nextDay = new Date(2026, 8, 12);
+  const moments = [
+    new Date(start.getTime() - 1), start,
+    new Date(2026, 8, 10, 12), new Date(nextDay.getTime() - 1), nextDay,
+  ];
+  for (const measuredAt of moments) await api.addMeasurement(db, { ...draft(), measuredAt });
+  const query = historyQuery({ sort: 'oldest', startDate: start, endDate: end });
+  assert.deepEqual((await api.getMeasurements(db, -1, query)).map((item) => item.id), [2, 3, 4]);
+  assert.equal(await api.countMeasurements(db, query), 3);
+  assert.equal((await api.getMeasurements(db, 2, query)).length, 2);
+  assert.equal(await api.countMeasurements(db, historyQuery({ ...DEFAULT_HISTORY_FILTERS, startDate: start })), 4);
+  assert.equal(await api.countMeasurements(db, historyQuery({ ...DEFAULT_HISTORY_FILTERS, endDate: end })), 4);
+  assert.equal(await api.countMeasurements(db, historyQuery(DEFAULT_HISTORY_FILTERS)), 5);
+  assert.equal(start.getHours(), 0);
+  assert.equal(end.getDate(), 11);
+});
+
+test('a one-day history filter includes the entire selected local day', async (t) => {
+  const db = await fixture(t);
+  const day = new Date(2026, 8, 10);
+  for (const measuredAt of [day, new Date(2026, 8, 10, 23, 59, 59, 999), new Date(2026, 8, 11)]) {
+    await api.addMeasurement(db, { ...draft(), measuredAt });
+  }
+  const query = historyQuery({ sort: 'newest', startDate: day, endDate: day });
+  assert.equal(await api.countMeasurements(db, query), 2);
+  assert.deepEqual((await api.getMeasurements(db, -1, query)).map((item) => item.id), [2, 1]);
 });

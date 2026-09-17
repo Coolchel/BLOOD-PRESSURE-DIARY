@@ -27,6 +27,7 @@ const MAPPING = {
   'chevron.right': 'chevron-right',
   plus: 'add',
   ellipsis: 'more-horiz',
+  'line.3.horizontal.decrease': 'filter-list',
   'delete.left': 'backspace',
   checkmark: 'check',
   xmark: 'close',
