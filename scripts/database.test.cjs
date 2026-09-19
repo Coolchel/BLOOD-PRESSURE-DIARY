@@ -25,10 +25,14 @@ function loadTS(relativePath) {
   const module = { exports: {} };
   modules.set(filename, module);
   const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const localRequire = (name) => {
     if (name === 'expo-file-system') return { File: FakeFile, Paths: { document: documentDirectory } };
+    if (name === 'react-native') return { Text: 'Text', View: 'View', StyleSheet: { create: (styles) => styles } };
+    if (name === 'react-native-svg') return Object.fromEntries([
+      ['__esModule', true], ['default', 'Svg'], ...['Circle', 'Defs', 'G', 'LinearGradient', 'Line', 'Path', 'Rect', 'Stop', 'Text'].map((key) => [key, key]),
+    ]);
     return name.startsWith('@/') ? loadTS(`${name.slice(2)}.ts`) : require(name);
   };
   new Function('exports', 'require', 'module', code)(module.exports, localRequire, module);
@@ -42,6 +46,10 @@ const { findPhaseFor } = loadTS('types/experiment.ts');
 const { savePhase, removePhase } = loadTS('data/phase-actions.ts');
 const { setAutoBackupEnabled } = loadTS('data/auto-backup.ts');
 const { DEFAULT_HISTORY_FILTERS, historyQuery } = loadTS('constants/history-filters.ts');
+const { chartTimeline } = loadTS('constants/chart-data.ts');
+const { statisticsWindow, measurementsInWindow, statisticsForPhase } = loadTS('constants/statistics-data.ts');
+const { isEntryValid, readingsFromEntries } = loadTS('constants/measurement-entry.ts');
+const { WeeklyChart } = loadTS('components/weekly-chart.tsx');
 const iso = (day) => `2026-09-${String(day).padStart(2, '0')}T12:00:00.000Z`;
 const reading = (systolic = 120) => ({ systolic, diastolic: 80, pulse: 70 });
 const draft = (day = 10, readings = [reading()], wellbeing = 7) => ({
@@ -188,6 +196,8 @@ test('invalid backups are rejected before replacement and current records surviv
     'ambiguous date': (b) => { b.sessions[0].measured_at = '1'; },
     'impossible date': (b) => { b.sessions[0].measured_at = '2026-02-30T12:00:00Z'; },
     'invalid creation date': (b) => { b.sessions[0].created_at = false; },
+    'invalid reading date': (b) => { b.readings[0].measured_at = 'not a date'; },
+    'null reading date': (b) => { b.readings[0].measured_at = null; },
     'missing reading parent': (b) => { b.readings[0].session_id = 99; },
     'inverted pressure': (b) => { b.readings[0].systolic = 70; },
     'fractional pressure': (b) => { b.readings[0].systolic = 120.5; },
@@ -357,4 +367,138 @@ test('a one-day history filter includes the entire selected local day', async (t
   const query = historyQuery({ sort: 'newest', startDate: day, endDate: day });
   assert.equal(await api.countMeasurements(db, query), 2);
   assert.deepEqual((await api.getMeasurements(db, -1, query)).map((item) => item.id), [2, 1]);
+});
+
+test('upgrading an old readings table preserves measurements and backfills times exactly once', async (t) => {
+  const db = await fixture(t);
+  await api.addMeasurement(db, { ...draft(10, [reading(120), reading(121)]), note: 'keep this note' });
+  await db.execAsync('ALTER TABLE measurement_readings DROP COLUMN measured_at');
+  await api.initializeDatabase(db);
+  const details = await api.getMeasurementById(db, 1);
+  assert.equal(details.note, 'keep this note');
+  assert.equal(details.readingCount, 2);
+  assert.deepEqual(details.readings.map((item) => item.measuredAt), [iso(10), iso(10)]);
+  await db.runAsync('UPDATE measurement_readings SET measured_at = ? WHERE position = 1', iso(11));
+  await api.initializeDatabase(db);
+  assert.deepEqual((await api.getMeasurementById(db, 1)).readings.map((item) => item.measuredAt), [iso(10), iso(11)]);
+});
+
+test('each series reading keeps its own time in details, JSON and restoration', async (t) => {
+  const db = await fixture(t);
+  const entries = [
+    { values: reading(120), measuredAt: new Date(iso(10)) },
+    { values: reading(121), measuredAt: new Date(iso(11)) },
+  ];
+  const readings = readingsFromEntries(entries);
+  await api.addMeasurement(db, { ...draft(10, readings), readings });
+  let details = await api.getMeasurementById(db, 1);
+  assert.equal(details.measuredAt, iso(10));
+  assert.deepEqual(details.readings.map((item) => item.measuredAt), [iso(10), iso(11)]);
+  const backup = await api.buildBackupPayload(db);
+  assert.deepEqual(backup.readings.map((item) => item.measured_at), [iso(10), iso(11)]);
+  await api.restoreBackup(db, backup);
+  details = await api.getMeasurementById(db, 1);
+  assert.deepEqual(details.readings.map((item) => item.measuredAt), [iso(10), iso(11)]);
+});
+
+test('backups without individual reading times remain restorable', async (t) => {
+  const db = await fixture(t);
+  await api.addMeasurement(db, draft(10, [reading(120), reading(121)]));
+  const backup = await api.buildBackupPayload(db);
+  for (const item of backup.readings) delete item.measured_at;
+  await api.restoreBackup(db, backup);
+  assert.deepEqual((await api.getMeasurementById(db, 1)).readings.map((item) => item.measuredAt), [iso(10), iso(10)]);
+});
+
+test('incomplete and invalid entry blocks cannot be silently dropped when converting a series', () => {
+  const complete = { values: reading(), measuredAt: new Date(iso(10)) };
+  const incomplete = { values: { systolic: 120 }, measuredAt: new Date(iso(10)) };
+  assert.equal(isEntryValid(incomplete), false);
+  assert.equal(isEntryValid(complete), true);
+  assert.throws(() => readingsFromEntries([complete, incomplete]));
+  assert.throws(() => readingsFromEntries([{ ...complete, values: reading(70) }]));
+  assert.throws(() => readingsFromEntries([{ ...complete, measuredAt: new Date('invalid') }]));
+  assert.throws(() => readingsFromEntries(Array.from({ length: 4 }, () => complete)));
+  assert.equal(readingsFromEntries([complete, complete, complete]).length, 3);
+});
+
+test('time statistics exclude records outside each interval while phase averages use the complete phase', async (t) => {
+  const db = await fixture(t);
+  const now = Date.parse('2026-09-17T12:00:00.000Z');
+  for (const daysAgo of [100, 40, 10, 3, -1]) {
+    await api.addMeasurement(db, { ...draft(), measuredAt: new Date(now - daysAgo * 86400000) });
+  }
+  const measurements = await api.getMeasurements(db, -1);
+  const counts = { week: 1, month: 2, quarter: 3, all: 5 };
+  for (const [interval, count] of Object.entries(counts)) {
+    assert.equal(measurementsInWindow(measurements, statisticsWindow(interval, now)).length, count);
+  }
+  const phase = { id: 1, kind: 'clean', title: 'full phase', startedAt: new Date(now - 50 * 86400000).toISOString(), endedAt: new Date(now - 5 * 86400000).toISOString(), note: '' };
+  assert.equal(statisticsForPhase(measurements, phase).count, 2);
+  assert.equal(measurementsInWindow(measurements, statisticsWindow('week', now)).length, 1);
+});
+
+test('chart phase bands use time boundaries, include gaps without measurements and stay clipped to the interval', async (t) => {
+  const db = await fixture(t);
+  for (const day of [2, 3, 29]) await api.addMeasurement(db, draft(day));
+  await api.createPhase(db, phase(1, 10));
+  await api.createPhase(db, phase(10, 20, 'coffee'));
+  await api.createPhase(db, phase(20, null, 'energy'));
+  const window = { from: Date.parse(iso(5)), until: Date.parse(iso(25)) };
+  const timeline = chartTimeline(await api.getMeasurements(db, -1), await api.getPhases(db), undefined, window);
+  assert.deepEqual(timeline.bands.map((band) => [band.phase.kind, band.start, band.end]), [
+    ['clean', 0, 0.25], ['coffee', 0.25, 0.75], ['energy', 0.75, 1],
+  ]);
+  const all = chartTimeline(await api.getMeasurements(db, -1));
+  assert.deepEqual(all.points.map((item) => item.id), [1, 2, 3]);
+  assert.equal(all.fraction(Date.parse(iso(3))), 1 / 27);
+});
+
+function descendants(element) {
+  if (Array.isArray(element)) return element.flatMap(descendants);
+  if (!element || typeof element !== 'object') return [];
+  return [element, ...descendants(element.props?.children)];
+}
+
+test('rendered pressure charts retain narrow phase names and bands for week, month and three months', async (t) => {
+  const db = await fixture(t);
+  const now = Date.parse(iso(17));
+  for (let minute = 0; minute < 60; minute += 1) {
+    await api.addMeasurement(db, { ...draft(), measuredAt: new Date(now - minute * 60000) });
+  }
+  await api.createPhase(db, { ...phase(1), startedAt: new Date(now - 100 * 86400000).toISOString(), endedAt: new Date(now - 30 * 60000).toISOString() });
+  await api.createPhase(db, { ...phase(1, null, 'coffee'), title: 'Short coffee phase', startedAt: new Date(now - 30 * 60000).toISOString() });
+  const measurements = await api.getMeasurements(db, -1);
+  const phases = await api.getPhases(db);
+  for (const interval of ['week', 'month', 'quarter', 'all']) {
+    const window = statisticsWindow(interval, now);
+    const nodes = descendants(WeeklyChart({ measurements: measurementsInWindow(measurements, window), phases, window }));
+    assert.ok(nodes.some((node) => node.type === 'Text' && node.props.children === 'Short coffee phase'), interval);
+    assert.ok(nodes.some((node) => node.type === 'Rect' && node.props.fill === '#8B5E3C'), interval);
+  }
+});
+
+test('a phase starting exactly at the last measurement remains visible at the chart boundary', async (t) => {
+  const db = await fixture(t);
+  await api.addMeasurement(db, draft(10));
+  await api.addMeasurement(db, draft(11));
+  await api.createPhase(db, phase(1, 11));
+  await api.createPhase(db, phase(11, null, 'coffee'));
+  const measurements = await api.getMeasurements(db, -1);
+  const phases = await api.getPhases(db);
+  const timeline = chartTimeline(measurements, phases);
+  assert.deepEqual(timeline.bands.map((band) => band.phase.kind), ['clean', 'coffee']);
+  const nodes = descendants(WeeklyChart({ measurements, phases }));
+  assert.ok(nodes.some((node) => node.type === 'Text' && node.props.children === 'coffee'));
+});
+
+test('home chart spaces measurements evenly even when their timestamps are irregular', () => {
+  const measurements = [
+    { id: 1, measuredAt: '2026-09-01T08:00:00.000Z', systolic: 120, diastolic: 80, pulse: 70, wellbeing: 7 },
+    { id: 2, measuredAt: '2026-09-01T08:01:00.000Z', systolic: 121, diastolic: 81, pulse: 71, wellbeing: 7 },
+    { id: 3, measuredAt: '2026-09-10T20:00:00.000Z', systolic: 122, diastolic: 82, pulse: 72, wellbeing: 7 },
+  ];
+  const nodes = descendants(WeeklyChart({ measurements, pointSpacing: 'uniform' }));
+  const systolicDots = nodes.filter((node) => node.type === 'Circle').slice(0, 3);
+  assert.deepEqual(systolicDots.map((node) => node.props.cx), [42, 185, 328]);
 });

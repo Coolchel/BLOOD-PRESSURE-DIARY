@@ -6,6 +6,7 @@ import type {
   MeasurementDetails,
   MeasurementDraft,
   MeasurementQuery,
+  MeasurementReading,
   MeasurementSort,
   MeasurementSummary,
   Reading,
@@ -77,6 +78,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       diastolic INTEGER NOT NULL,
       pulse INTEGER NOT NULL,
       position INTEGER NOT NULL,
+      measured_at TEXT,
       FOREIGN KEY (session_id) REFERENCES measurement_sessions(id) ON DELETE CASCADE
     );
 
@@ -96,6 +98,11 @@ export async function initializeDatabase(db: SQLiteDatabase) {
     );
   `);
 
+  const readingColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(measurement_readings)');
+  if (!readingColumns.some((column) => column.name === 'measured_at')) {
+    await db.execAsync('ALTER TABLE measurement_readings ADD COLUMN measured_at TEXT');
+  }
+
   // Remove sample rows created by earlier versions without touching real measurements.
   await db.withTransactionAsync(async () => {
     await db.runAsync(
@@ -105,6 +112,9 @@ export async function initializeDatabase(db: SQLiteDatabase) {
        )`,
     );
     await db.runAsync('DELETE FROM measurement_sessions WHERE is_demo = 1');
+    await db.runAsync(`UPDATE measurement_readings SET measured_at =
+      (SELECT measured_at FROM measurement_sessions WHERE id = session_id)
+      WHERE measured_at IS NULL`);
     if ((await getSetting(db, 'initial_phases_seeded')) !== 'yes') {
       await seedInitialPhases(db);
       await setSetting(db, 'initial_phases_seeded', 'yes');
@@ -114,6 +124,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
 
 export async function addMeasurement(db: SQLiteDatabase, draft: MeasurementDraft) {
   validateReadings(draft.mode, draft.readings);
+  const readingTimes = draft.readings.map((reading) => backupDate(reading.measuredAt ?? draft.measuredAt.toISOString()));
   await db.withTransactionAsync(async () => {
     const session = await db.runAsync(
       `INSERT INTO measurement_sessions
@@ -130,13 +141,14 @@ export async function addMeasurement(db: SQLiteDatabase, draft: MeasurementDraft
     for (const [position, reading] of draft.readings.entries()) {
       await db.runAsync(
         `INSERT INTO measurement_readings
-          (session_id, systolic, diastolic, pulse, position)
-         VALUES (?, ?, ?, ?, ?)`,
+          (session_id, systolic, diastolic, pulse, position, measured_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         session.lastInsertRowId,
         reading.systolic,
         reading.diastolic,
         reading.pulse,
         position,
+        readingTimes[position],
       );
     }
   });
@@ -210,8 +222,8 @@ export async function getMeasurementById(
 
   if (!row) return null;
 
-  const readings = await db.getAllAsync<Reading>(
-    `SELECT systolic, diastolic, pulse
+  const readings = await db.getAllAsync<MeasurementReading>(
+    `SELECT systolic, diastolic, pulse, measured_at AS measuredAt
      FROM measurement_readings
      WHERE session_id = ?
      ORDER BY position`,
@@ -241,6 +253,7 @@ type BackupSession = {
 type BackupReading = Reading & {
   session_id: number;
   position: number;
+  measured_at?: string;
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -323,6 +336,7 @@ function parseBackup(payload: unknown) {
   });
 
   const sessionIds = new Set(sessions.map((session) => session.id));
+  const sessionTimes = new Map(sessions.map((session) => [session.id, session.measured_at]));
   if (sessionIds.size !== sessions.length) throw new Error('duplicate sessions');
   const readings = value.readings.map((item): BackupReading => {
     const reading = record(item);
@@ -343,6 +357,7 @@ function parseBackup(payload: unknown) {
       diastolic: reading.diastolic,
       pulse: reading.pulse,
       position: reading.position,
+      measured_at: backupDate(reading.measured_at === undefined ? sessionTimes.get(reading.session_id) : reading.measured_at),
     };
     if (!validReading(parsed)) throw new Error('invalid reading');
     return parsed;
@@ -430,13 +445,14 @@ export async function restoreBackup(db: SQLiteDatabase, payload: unknown) {
     for (const reading of backup.readings) {
       await db.runAsync(
         `INSERT INTO measurement_readings
-          (session_id, systolic, diastolic, pulse, position)
-         VALUES (?, ?, ?, ?, ?)`,
+          (session_id, systolic, diastolic, pulse, position, measured_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         reading.session_id,
         reading.systolic,
         reading.diastolic,
         reading.pulse,
         reading.position,
+        reading.measured_at ?? null,
       );
     }
 
@@ -536,7 +552,7 @@ export async function buildBackupPayload(db: SQLiteDatabase): Promise<BackupPayl
   );
 
   const readings = await db.getAllAsync<BackupReading>(
-    `SELECT r.session_id, r.systolic, r.diastolic, r.pulse, r.position
+    `SELECT r.session_id, r.systolic, r.diastolic, r.pulse, r.position, r.measured_at
      FROM measurement_readings r
      JOIN measurement_sessions s ON s.id = r.session_id
      ORDER BY r.session_id, r.position`,

@@ -157,20 +157,25 @@ export default function MeasurementDetailsScreen() {
               <View
                 key={`${index}-${reading.systolic}`}
                 style={[styles.readingBlock, index > 0 && styles.readingDivider]}>
-                <View style={styles.readingIndex}>
-                  <Text style={styles.readingIndexText}>{index + 1}</Text>
+                <View style={styles.readingDateBlock}>
+                  <View style={styles.readingIndex}>
+                    <Text style={styles.readingIndexText}>{index + 1}</Text>
+                  </View>
+                  {reading.measuredAt ? <Text style={styles.readingDate}>{formatDate(reading.measuredAt)}</Text> : null}
                 </View>
-                <View style={styles.readingMetric}>
-                  <Text style={styles.readingValue}>{reading.systolic}</Text>
-                  <Text style={styles.readingLabel}>Сист.</Text>
-                </View>
-                <View style={styles.readingMetric}>
-                  <Text style={styles.readingValue}>{reading.diastolic}</Text>
-                  <Text style={styles.readingLabel}>Диаст.</Text>
-                </View>
-                <View style={styles.readingMetric}>
-                  <Text style={styles.readingValue}>{reading.pulse}</Text>
-                  <Text style={styles.readingLabel}>Пульс</Text>
+                <View style={styles.readingMetrics}>
+                  <View style={styles.readingMetric}>
+                    <Text style={styles.readingValue}>{reading.systolic}</Text>
+                    <Text style={styles.readingLabel}>Сист.</Text>
+                  </View>
+                  <View style={styles.readingMetric}>
+                    <Text style={styles.readingValue}>{reading.diastolic}</Text>
+                    <Text style={styles.readingLabel}>Диаст.</Text>
+                  </View>
+                  <View style={styles.readingMetric}>
+                    <Text style={styles.readingValue}>{reading.pulse}</Text>
+                    <Text style={styles.readingLabel}>Пульс</Text>
+                  </View>
                 </View>
               </View>
             ))}
@@ -385,11 +390,13 @@ const styles = StyleSheet.create({
   },
   readingBlock: {
     minHeight: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingVertical: 12,
     paddingHorizontal: Spacing.md,
-    gap: 14,
+    gap: 10,
   },
+  readingDateBlock: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  readingDate: { flex: 1, color: Palette.muted, fontSize: 11, lineHeight: 16 },
+  readingMetrics: { flexDirection: 'row', gap: 14 },
   readingDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Palette.line,

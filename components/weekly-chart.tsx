@@ -12,8 +12,11 @@ import Svg, {
 } from 'react-native-svg';
 
 import { Palette } from '@/constants/design';
+import { chartTimeline } from '@/constants/chart-data';
+import { formatPhaseRange } from '@/constants/phase-format';
+import type { TimeWindow } from '@/constants/statistics-data';
 import type { ExperimentPhase } from '@/types/experiment';
-import { findPhaseFor, phaseKindInfo } from '@/types/experiment';
+import { phaseKindInfo } from '@/types/experiment';
 import type { MeasurementSummary } from '@/types/measurement';
 
 export type ChartMetric = 'pressure' | 'pulse' | 'wellbeing';
@@ -23,50 +26,9 @@ type WeeklyChartProps = {
   metric?: ChartMetric;
   maxPoints?: number;
   phases?: ExperimentPhase[];
+  pointSpacing?: 'time' | 'uniform';
+  window?: TimeWindow;
 };
-
-type Band = {
-  key: string;
-  start: number;
-  end: number;
-  color: string;
-  soft: string;
-  label: string;
-};
-
-/** Группирует подряд идущие точки одного периода — из них получаются фоновые полосы. */
-function buildBands(points: MeasurementSummary[], phases: ExperimentPhase[]): Band[] {
-  const runs: { id: number; start: number; end: number; label: string }[] = [];
-
-  points.forEach((point, index) => {
-    const phase = findPhaseFor(point.measuredAt, phases);
-    const id = phase?.id ?? -1;
-    const last = runs[runs.length - 1];
-
-    if (last && last.id === id) {
-      last.end = index;
-      return;
-    }
-
-    runs.push({ id, start: index, end: index, label: phase?.title ?? '' });
-  });
-
-  // Точки вне любого периода полосой не закрашиваем.
-  return runs
-    .filter((run) => run.id !== -1)
-    .map((run) => {
-      const info = phaseKindInfo(phases.find((item) => item.id === run.id)?.kind ?? 'clean');
-
-      return {
-        key: `${run.id}-${run.start}`,
-        start: run.start,
-        end: run.end,
-        color: info.color,
-        soft: info.soft,
-        label: run.label,
-      };
-    });
-}
 
 type Series = {
   key: string;
@@ -110,9 +72,10 @@ export function WeeklyChart({
   metric = 'pressure',
   maxPoints,
   phases,
+  pointSpacing = 'time',
+  window,
 }: WeeklyChartProps) {
-  const selected = maxPoints ? measurements.slice(0, maxPoints) : measurements;
-  const points = selected.slice().reverse();
+  const { points, from, until, fraction, bands } = chartTimeline(measurements, phases, maxPoints, window);
   const series: Series[] =
     metric === 'pressure'
       ? [
@@ -159,9 +122,13 @@ export function WeeklyChart({
     series.flatMap((item) => item.values),
     metric,
   );
-  const xStep = (PLOT_RIGHT - PLOT_LEFT) / Math.max(points.length - 1, 1);
+  const xAt = (part: number) => PLOT_LEFT + part * (PLOT_RIGHT - PLOT_LEFT);
   const xFor = (index: number) =>
-    points.length === 1 ? (PLOT_LEFT + PLOT_RIGHT) / 2 : PLOT_LEFT + index * xStep;
+    xAt(
+      pointSpacing === 'uniform'
+        ? points.length === 1 ? 0.5 : index / (points.length - 1)
+        : fraction(Date.parse(points[index].measuredAt)),
+    );
   const yFor = (value: number) =>
     CHART_BOTTOM -
     ((Math.min(domain.max, Math.max(domain.min, value)) - domain.min) /
@@ -178,19 +145,20 @@ export function WeeklyChart({
   const compact = points.length > 14;
   const dotRadius = dense ? 0 : compact ? 2.2 : 3.8;
   const labelCount = Math.min(5, points.length);
-  const labelIndexes = new Set(
-    Array.from({ length: labelCount }, (_, position) =>
-      labelCount === 1 ? 0 : Math.round((position * (points.length - 1)) / (labelCount - 1)),
-    ),
-  );
-  const unit = metric === 'pressure' ? 'мм' : metric === 'pulse' ? 'уд/м' : 'балл';
-  const bands = phases?.length ? buildBands(points, phases) : [];
-  const bandEdge = (index: number, side: 'left' | 'right') => {
-    if (side === 'left') {
-      return index === 0 ? PLOT_LEFT - 9 : (xFor(index - 1) + xFor(index)) / 2;
+  const axisLabels = Array.from({ length: labelCount }, (_, position) => {
+    if (pointSpacing === 'uniform') {
+      const pointIndex = labelCount === 1 ? 0 : Math.round(position * (points.length - 1) / (labelCount - 1));
+      return {
+        part: points.length === 1 ? 0.5 : pointIndex / (points.length - 1),
+        time: Date.parse(points[pointIndex].measuredAt),
+      };
     }
-    return index === points.length - 1 ? PLOT_RIGHT + 9 : (xFor(index) + xFor(index + 1)) / 2;
-  };
+    const time = labelCount === 1
+      ? Date.parse(points[0].measuredAt)
+      : from + position * (until - from) / (labelCount - 1);
+    return { part: fraction(time), time };
+  });
+  const unit = metric === 'pressure' ? 'мм' : metric === 'pulse' ? 'уд/м' : 'балл';
 
   return (
     <View>
@@ -215,28 +183,19 @@ export function WeeklyChart({
         </Defs>
 
         {bands.map((band) => {
-          const left = bandEdge(band.start, 'left');
-          const width = bandEdge(band.end, 'right') - left;
+          const left = xAt(band.start);
+          const width = Math.max(1, xAt(band.end) - left);
+          const info = phaseKindInfo(band.phase.kind);
           return (
-            <G key={band.key}>
+            <G key={band.phase.id}>
               <Rect
-                fill={band.soft}
+                fill={info.soft}
                 height={CHART_BOTTOM - CHART_TOP + 18}
                 width={width}
                 x={left}
                 y={CHART_TOP - 10}
               />
-              <Rect fill={band.color} height={2.5} width={width} x={left} y={CHART_BOTTOM + 6} />
-              {width >= 46 ? (
-                <SvgText
-                  fill={band.color}
-                  fontSize={7.5}
-                  fontWeight="700"
-                  x={left + 5}
-                  y={CHART_TOP - 2}>
-                  {band.label}
-                </SvgText>
-              ) : null}
+              <Rect fill={info.color} height={2.5} width={width} x={left} y={CHART_BOTTOM + 6} />
             </G>
           );
         })}
@@ -299,17 +258,17 @@ export function WeeklyChart({
           </G>
         ))}
 
-        {points.map((item, index) => {
-          if (!labelIndexes.has(index)) return null;
-          const label = formatAxisDate(item.measuredAt);
+        {axisLabels.map(({ part, time }, index) => {
+          const label = formatAxisDate(new Date(time).toISOString());
+          const anchor = index === 0 ? 'start' : index === axisLabels.length - 1 ? 'end' : 'middle';
           return (
-            <G key={`label-${item.id}`}>
+            <G key={`label-${index}`}>
               <SvgText
                 fill={Palette.muted}
                 fontSize={8.5}
                 fontWeight="600"
-                textAnchor="middle"
-                x={xFor(index)}
+                textAnchor={anchor}
+                x={xAt(part)}
                 y={158}>
                 {label.date}
               </SvgText>
@@ -317,8 +276,8 @@ export function WeeklyChart({
                 <SvgText
                   fill={Palette.subtle}
                   fontSize={8}
-                  textAnchor="middle"
-                  x={xFor(index)}
+                  textAnchor={anchor}
+                  x={xAt(part)}
                   y={172}>
                   {label.time}
                 </SvgText>
@@ -327,6 +286,19 @@ export function WeeklyChart({
           );
         })}
       </Svg>
+      {bands.length ? (
+        <View style={styles.phaseLegend}>
+          {bands.map(({ phase }) => (
+            <View key={phase.id} style={styles.phaseLegendItem}>
+              <View style={[styles.dot, { backgroundColor: phaseKindInfo(phase.kind).color }]} />
+              <View style={styles.phaseLegendCopy}>
+                <Text style={styles.legendText}>{phase.title}</Text>
+                <Text style={styles.phaseRange}>{formatPhaseRange(phase.startedAt, phase.endedAt)}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -344,6 +316,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  phaseLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 6, paddingBottom: 12 },
+  phaseLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
+  phaseLegendCopy: { flexShrink: 1 },
+  phaseRange: { color: Palette.subtle, fontSize: 10, marginTop: 2 },
   dot: {
     width: 8,
     height: 8,

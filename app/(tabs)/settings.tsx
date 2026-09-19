@@ -185,6 +185,24 @@ export default function SettingsScreen() {
         };
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Измерения');
 
+        const payload = await buildBackupPayload(db);
+        const sessionDates = new Map(payload.sessions.map((session) => [session.id, session.measured_at]));
+        const readingSheet = XLSX.utils.aoa_to_sheet([
+          ['Запись', 'Номер замера', 'Дата и время', 'Систолическое, мм рт. ст.', 'Диастолическое, мм рт. ст.', 'Пульс, уд/мин'],
+          ...payload.readings.map((reading) => [
+            reading.session_id,
+            reading.position + 1,
+            new Date(reading.measured_at ?? sessionDates.get(reading.session_id)!),
+            reading.systolic, reading.diastolic, reading.pulse,
+          ]),
+        ], { cellDates: true });
+        for (let row = 2; row <= payload.readings.length + 1; row += 1) {
+          readingSheet[`C${row}`].z = 'dd.mm.yyyy hh:mm';
+        }
+        readingSheet['!cols'] = [{ wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 27 }, { wch: 29 }, { wch: 17 }];
+        readingSheet['!autofilter'] = { ref: `A1:F${payload.readings.length + 1}` };
+        XLSX.utils.book_append_sheet(workbook, readingSheet, 'Замеры');
+
         if (phases.length) {
           const phaseHeader = [
             'Период',

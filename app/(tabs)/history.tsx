@@ -139,11 +139,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Palette.line,
+    borderColor: 'rgba(72,82,102,0.04)',
     backgroundColor: Palette.surfaceStrong,
     ...Shadow.card,
   },
-  filterActive: { backgroundColor: Palette.coralSoft, borderColor: Palette.coral },
+  filterActive: { backgroundColor: Palette.coralSoft, borderColor: 'rgba(255,94,87,0.06)' },
   filterCaption: { color: Palette.muted, fontSize: 12, lineHeight: 18, marginBottom: 12 },
   add: {
     width: 48,

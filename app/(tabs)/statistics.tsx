@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
 import { ScreenShell } from '@/components/screen-shell';
@@ -8,36 +8,36 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WeeklyChart } from '@/components/weekly-chart';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
 import { measurementStats } from '@/constants/measurement-stats';
+import { formatPhaseRange } from '@/constants/phase-format';
+import { measurementsInWindow, STATISTICS_INTERVALS, statisticsForPhase, statisticsWindow } from '@/constants/statistics-data';
+import type { StatisticsInterval } from '@/constants/statistics-data';
 import { useMeasurements } from '@/hooks/use-measurements';
 import { usePhaseList } from '@/hooks/use-phases';
-
-type Period = 'week' | 'month' | 'quarter' | 'all';
-
-const PERIODS: { key: Period; label: string; days: number | null }[] = [
-  { key: 'week', label: 'Неделя', days: 7 },
-  { key: 'month', label: 'Месяц', days: 30 },
-  { key: 'quarter', label: '3 месяца', days: 90 },
-  { key: 'all', label: 'Всё', days: null },
-];
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { phaseKindInfo } from '@/types/experiment';
 
 export default function StatisticsScreen() {
   const { measurements: allMeasurements } = useMeasurements(-1);
-  const [period, setPeriod] = useState<Period>('week');
+  const [period, setPeriod] = useState<StatisticsInterval>('week');
+  const [averageMode, setAverageMode] = useState<'time' | 'phase'>('time');
+  const [averagePeriod, setAveragePeriod] = useState<StatisticsInterval>('week');
+  const [phaseId, setPhaseId] = useState<number | null>(null);
   const phases = usePhaseList();
 
-  const selected = PERIODS.find((item) => item.key === period) ?? PERIODS[0];
-  const measurements = useMemo(() => {
-    if (selected.days === null) return allMeasurements;
-
-    const from = Date.now() - selected.days * DAY_MS;
-    return allMeasurements.filter((item) => new Date(item.measuredAt).getTime() >= from);
-  }, [allMeasurements, selected.days]);
+  const selected = STATISTICS_INTERVALS.find((item) => item.key === period) ?? STATISTICS_INTERVALS[0];
+  const { window, measurements } = useMemo(() => {
+    const window = statisticsWindow(period, Date.now());
+    return { window, measurements: measurementsInWindow(allMeasurements, window) };
+  }, [allMeasurements, period]);
   const systolic = measurements.map((item) => item.systolic);
   const diastolic = measurements.map((item) => item.diastolic);
   const pulse = measurements.map((item) => item.pulse);
-  const stats = measurementStats(measurements);
+  const selectedPhase = phases.find((phase) => phase.id === phaseId) ?? phases[0] ?? null;
+  const averageMeasurements = useMemo(() => measurementsInWindow(allMeasurements, statisticsWindow(averagePeriod, Date.now())), [allMeasurements, averagePeriod]);
+  const stats = averageMode === 'phase'
+    ? selectedPhase ? statisticsForPhase(allMeasurements, selectedPhase) : measurementStats([])
+    : measurementStats(averageMeasurements);
+  const averageLabel = STATISTICS_INTERVALS.find((item) => item.key === averagePeriod)?.label;
+  const hasAverageData = stats.count > 0;
   const hasData = measurements.length > 0;
 
   return (
@@ -51,7 +51,7 @@ export default function StatisticsScreen() {
       </Text>
 
       <View style={styles.periods}>
-        {PERIODS.map((item) => {
+        {STATISTICS_INTERVALS.map((item) => {
           const active = item.key === period;
           return (
             <Pressable
@@ -79,7 +79,7 @@ export default function StatisticsScreen() {
           </View>
           <IconSymbol name="chart.line.uptrend.xyaxis" size={23} color={Palette.coral} />
         </View>
-        <WeeklyChart measurements={measurements} phases={phases} />
+        <WeeklyChart measurements={measurements} phases={phases} window={window} />
       </GlassCard>
 
       <GlassCard contentStyle={styles.chartCard} style={styles.chartSpacing}>
@@ -90,7 +90,7 @@ export default function StatisticsScreen() {
           </View>
           <IconSymbol name="waveform.path.ecg" size={23} color="#6D78A8" />
         </View>
-        <WeeklyChart measurements={measurements} metric="pulse" />
+        <WeeklyChart measurements={measurements} metric="pulse" window={window} />
       </GlassCard>
 
       <GlassCard contentStyle={styles.chartCard}>
@@ -103,29 +103,73 @@ export default function StatisticsScreen() {
             <Text style={styles.numberIconText}>10</Text>
           </View>
         </View>
-        <WeeklyChart measurements={measurements} metric="wellbeing" />
+        <WeeklyChart measurements={measurements} metric="wellbeing" window={window} />
       </GlassCard>
 
       <Text style={styles.sectionTitle}>Средние значения</Text>
+      <View style={[styles.periods, styles.averageModes]}>
+        {(['time', 'phase'] as const).map((mode) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: averageMode === mode }}
+            key={mode}
+            onPress={() => setAverageMode(mode)}
+            style={[styles.periodItem, averageMode === mode && styles.periodItemActive]}>
+            <Text style={[styles.periodText, averageMode === mode && styles.periodTextActive]}>
+              {mode === 'time' ? 'По времени' : 'По периодам'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {averageMode === 'time' ? (
+        <View style={styles.periods}>
+          {STATISTICS_INTERVALS.map((item) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: averagePeriod === item.key }}
+              key={item.key}
+              onPress={() => setAveragePeriod(item.key)}
+              style={[styles.periodItem, averagePeriod === item.key && styles.periodItemActive]}>
+              <Text style={[styles.periodText, averagePeriod === item.key && styles.periodTextActive]}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : phases.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.phaseChoices}>
+          {phases.map((phase) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: selectedPhase?.id === phase.id }}
+              key={phase.id}
+              onPress={() => setPhaseId(phase.id)}
+              style={[styles.phaseChoice, selectedPhase?.id === phase.id && { borderColor: phaseKindInfo(phase.kind).color }]}>
+              <Text style={styles.periodTextActive}>{phase.title}</Text>
+              <Text style={styles.phaseChoiceRange}>{formatPhaseRange(phase.startedAt, phase.endedAt)}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : <Text style={styles.sectionCaption}>Создай период в разделе «Периоды».</Text>}
       <Text style={styles.sectionCaption}>
-        {selected.label} · {measurements.length} из {allMeasurements.length} записей
+        {averageMode === 'time'
+          ? `${averageLabel} · ${stats.count} из ${allMeasurements.length} записей`
+          : selectedPhase ? `${selectedPhase.title} · весь период · ${stats.count} записей` : 'Нет периодов для расчёта'}
       </Text>
       <View style={styles.averageGrid}>
         <View style={[styles.averageCard, { backgroundColor: Palette.coralSoft }]}>
           <IconSymbol name="arrow.up.circle" size={22} color={Palette.coral} />
-          <Text style={styles.averageValue}>{hasData ? stats.systolic : '—'}</Text>
+          <Text style={styles.averageValue}>{hasAverageData ? stats.systolic : '—'}</Text>
           <Text style={styles.averageLabel}>Систолическое</Text>
           <Text style={styles.averageUnit}>мм рт. ст.</Text>
         </View>
         <View style={[styles.averageCard, { backgroundColor: Palette.orangeSoft }]}>
           <IconSymbol name="arrow.down.circle" size={22} color={Palette.orange} />
-          <Text style={styles.averageValue}>{hasData ? stats.diastolic : '—'}</Text>
+          <Text style={styles.averageValue}>{hasAverageData ? stats.diastolic : '—'}</Text>
           <Text style={styles.averageLabel}>Диастолическое</Text>
           <Text style={styles.averageUnit}>мм рт. ст.</Text>
         </View>
         <View style={styles.averageCard}>
           <IconSymbol name="waveform.path.ecg" size={22} color="#6D78A8" />
-          <Text style={styles.averageValue}>{hasData ? stats.pulse : '—'}</Text>
+          <Text style={styles.averageValue}>{hasAverageData ? stats.pulse : '—'}</Text>
           <Text style={styles.averageLabel}>Пульс</Text>
           <Text style={styles.averageUnit}>уд/мин</Text>
         </View>
@@ -133,7 +177,7 @@ export default function StatisticsScreen() {
           <View style={styles.numberIcon}>
             <Text style={styles.numberIconText}>10</Text>
           </View>
-          <Text style={styles.averageValue}>{hasData ? stats.wellbeing : '—'}</Text>
+          <Text style={styles.averageValue}>{hasAverageData ? stats.wellbeing : '—'}</Text>
           <Text style={styles.averageLabel}>Самочувствие</Text>
           <Text style={styles.averageUnit}>из 10</Text>
         </View>
@@ -209,6 +253,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     backgroundColor: 'rgba(240,241,245,0.92)',
   },
+  averageModes: { marginTop: 10, marginBottom: 10 },
+  phaseChoices: { gap: 10, paddingBottom: 14 },
+  phaseChoice: { borderWidth: 1, borderColor: Palette.line, borderRadius: Radius.small, padding: 12, backgroundColor: Palette.white },
+  phaseChoiceRange: { color: Palette.muted, fontSize: 10, marginTop: 4 },
   periodItem: {
     flex: 1,
     alignItems: 'center',

@@ -74,7 +74,7 @@ export default function HomeScreen() {
         <Text style={styles.sectionMeta}>{recent.length} измерений</Text>
       </View>
       <GlassCard contentStyle={styles.chartCard}>
-        <WeeklyChart maxPoints={12} measurements={recent} />
+        <WeeklyChart maxPoints={12} measurements={recent} pointSpacing="uniform" />
       </GlassCard>
 
       <View style={styles.sectionHeader}>

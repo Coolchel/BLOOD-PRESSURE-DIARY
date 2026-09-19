@@ -17,10 +17,16 @@ type ScreenShellProps = PropsWithChildren<{
   contentContainerStyle?: ScrollViewProps['contentContainerStyle'];
 }>;
 
+const MINIMUM_BOTTOM_SPACING = 116;
+
 export function ScreenShell({ children, scroll = true, contentContainerStyle }: ScreenShellProps) {
   const insets = useSafeAreaInsets();
-  const bottomSpacing = StyleSheet.flatten(contentContainerStyle)?.paddingBottom ?? styles.scrollContent.paddingBottom;
-  const safeBottomSpacing = typeof bottomSpacing === 'number' ? Math.max(bottomSpacing, insets.bottom) : bottomSpacing;
+  const requestedBottomSpacing = StyleSheet.flatten(contentContainerStyle)?.paddingBottom;
+  const safeBottomSpacing = Math.max(
+    MINIMUM_BOTTOM_SPACING,
+    insets.bottom,
+    typeof requestedBottomSpacing === 'number' ? requestedBottomSpacing : 0,
+  );
   const content = scroll ? (
     <ScrollView
       automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
@@ -59,6 +65,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.screen,
     paddingTop: Spacing.sm,
-    paddingBottom: 80,
+    paddingBottom: MINIMUM_BOTTOM_SPACING,
   },
 });

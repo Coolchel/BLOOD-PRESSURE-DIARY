@@ -1,13 +1,10 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useMemo, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Alert,
-  Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -16,115 +13,62 @@ import {
 } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
-import { MetricRow } from '@/components/metric-row';
-import { NumberEntrySheet } from '@/components/number-entry-sheet';
+import { MeasurementEntry } from '@/components/measurement-entry';
 import { SaveSuccessOverlay } from '@/components/save-success-overlay';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
 import { runAutoBackup } from '@/data/auto-backup';
 import { addMeasurement } from '@/data/database';
-import type { MeasurementMode, Reading } from '@/types/measurement';
+import type { MeasurementMode } from '@/types/measurement';
+import { emptyMeasurementEntry, isEntryComplete, isEntryValid, readingsFromEntries } from '@/constants/measurement-entry';
+import type { MeasurementEntryDraft } from '@/constants/measurement-entry';
 import { WELLBEING_TAGS } from '@/types/measurement';
-
-type Metric = keyof Reading;
-type CurrentReading = Partial<Reading>;
-
-const metricConfig = {
-  systolic: {
-    title: 'Систолическое давление',
-    unit: 'мм рт. ст.',
-    min: 60,
-    max: 260,
-  },
-  diastolic: {
-    title: 'Диастолическое давление',
-    unit: 'мм рт. ст.',
-    min: 35,
-    max: 160,
-  },
-  pulse: {
-    title: 'Пульс',
-    unit: 'уд/мин',
-    min: 30,
-    max: 220,
-  },
-} as const;
-
-function isComplete(reading: CurrentReading): reading is Reading {
-  return (
-    reading.systolic !== undefined &&
-    reading.diastolic !== undefined &&
-    reading.pulse !== undefined
-  );
-}
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
 
 export default function NewMeasurementScreen() {
   const db = useSQLiteContext();
   const [mode, setMode] = useState<MeasurementMode>('single');
-  const [current, setCurrent] = useState<CurrentReading>({});
-  const [series, setSeries] = useState<Reading[]>([]);
-  const [activeMetric, setActiveMetric] = useState<Metric | null>(null);
-  const [measuredAt, setMeasuredAt] = useState(new Date());
-  const [datePickerVisible, setDatePickerVisible] = useState(false);
-  const [androidPickerMode, setAndroidPickerMode] = useState<'date' | 'time' | null>(null);
+  const [single, setSingle] = useState<MeasurementEntryDraft>(emptyMeasurementEntry);
+  const [series, setSeries] = useState<(MeasurementEntryDraft & { id: number })[]>([]);
+  const nextEntryId = useRef(0);
   const [wellbeing, setWellbeing] = useState(7);
   const [tags, setTags] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const activeConfig = activeMetric ? metricConfig[activeMetric] : undefined;
-  const seriesFull = mode === 'series' && series.length >= 3;
-  const previewReadings = useMemo(() => {
-    if (mode === 'series' && isComplete(current)) return [...series, current];
-    return mode === 'series' ? series : isComplete(current) ? [current] : [];
-  }, [current, mode, series]);
+  const entries = mode === 'single' ? [single] : series;
+  const completedCount = entries.filter(isEntryValid).length;
+  const canAddAnother = series.length < 3 && series.every(isEntryValid);
 
   function switchMode(next: MeasurementMode) {
-    if (next === mode) return;
+    if (next === mode || saving) return;
     void Haptics.selectionAsync();
     setMode(next);
-    setSeries([]);
-  }
-
-  function updateMetric(value: number) {
-    if (!activeMetric || seriesFull) return;
-    const metric = activeMetric;
-    setCurrent((existing) => ({ ...existing, [metric]: value }));
-
-    if (metric === 'systolic') {
-      setActiveMetric('diastolic');
-    } else if (metric === 'diastolic') {
-      setActiveMetric('pulse');
-    } else {
-      setActiveMetric(null);
-    }
   }
 
   function addToSeries() {
-    if (series.length >= 3) {
-      Alert.alert('Серия уже заполнена', 'Можно сохранить среднее из трёх замеров.');
+    if (saving) return;
+    if (!isEntryValid(single)) {
+      Alert.alert('Проверь замер', 'Заполни давление и пульс. Систолическое должно быть выше диастолического.');
       return;
     }
-    if (!isComplete(current)) {
-      Alert.alert('Заполни все значения', 'Для серии нужны давление и пульс каждого замера.');
+    if (series.length >= 3 || !series.every(isEntryValid)) {
+      Alert.alert('Проверь серию', 'Заверши добавленные замеры в разделе «Серия». В серии может быть не больше трёх замеров.');
       return;
     }
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSeries((items) => [...items, current]);
-    setCurrent({});
-    setActiveMetric(series.length + 1 >= 3 ? null : 'systolic');
+    const id = ++nextEntryId.current;
+    setSeries((items) => [...items, { ...single, id }]);
+    setMode('series');
+    void Haptics.selectionAsync();
+  }
+
+  function addAnother() {
+    if (!canAddAnother || saving) return;
+    const id = ++nextEntryId.current;
+    const entry = { ...emptyMeasurementEntry(), id };
+    setSeries((items) => items.length < 3 && items.every(isEntryValid) ? [...items, entry] : items);
+    void Haptics.selectionAsync();
   }
 
   function toggleTag(tag: string) {
@@ -136,41 +80,24 @@ export default function NewMeasurementScreen() {
     );
   }
 
-  function closeDatePicker() {
-    setAndroidPickerMode(null);
-    setDatePickerVisible(false);
-  }
-
   async function save() {
     if (saving) return;
-    const readings =
-      mode === 'series'
-        ? isComplete(current)
-          ? [...series, current]
-          : series
-        : isComplete(current)
-          ? [current]
-          : [];
-
-    if (mode === 'single' && readings.length !== 1) {
-      Alert.alert('Не хватает данных', 'Укажи систолическое, диастолическое давление и пульс.');
-      return;
-    }
-    if (mode === 'series' && (readings.length < 2 || readings.length > 3)) {
+    if (mode === 'series' && (series.length < 2 || series.length > 3)) {
       Alert.alert('Проверь серию', 'В серии должно быть от двух до трёх замеров.');
       return;
     }
-    if (readings.some((reading) => reading.systolic <= reading.diastolic)) {
-      Alert.alert(
-        'Проверь значения давления',
-        'Систолическое давление должно быть выше диастолического.',
-      );
+    if (entries.some((entry) => !isEntryComplete(entry))) {
+      Alert.alert('Не хватает данных', 'Заполни показатели каждого добавленного замера или удали незаполненный замер.');
+      return;
+    }
+    if (entries.some((entry) => !isEntryValid(entry))) {
+      Alert.alert('Проверь значения', 'Систолическое давление должно быть выше диастолического.');
       return;
     }
 
     try {
       setSaving(true);
-      await addMeasurement(db, { measuredAt, wellbeing, tags, note, mode, readings });
+      await addMeasurement(db, { measuredAt: entries[0].measuredAt, wellbeing, tags, note, mode, readings: readingsFromEntries(entries) });
       // Копия обновляется в фоне и никогда не бросает исключение — экран её не ждёт.
       void runAutoBackup(db);
       setSaved(true);
@@ -204,6 +131,8 @@ export default function NewMeasurementScreen() {
             return (
               <Pressable
                 accessibilityRole="button"
+                accessibilityState={{ selected, disabled: saving }}
+                disabled={saving}
                 key={item}
                 onPress={() => switchMode(item)}
                 style={[styles.segmentItem, selected && styles.segmentSelected]}>
@@ -215,85 +144,58 @@ export default function NewMeasurementScreen() {
           })}
         </View>
 
-        <Text style={styles.sectionLabel}>ПОКАЗАТЕЛИ</Text>
-        <GlassCard contentStyle={styles.metricsCard}>
-          <MetricRow
-            disabled={seriesFull}
-            icon="arrow.up.circle"
-            iconColor={Palette.coral}
-            label="Систолическое"
-            onPress={() => setActiveMetric('systolic')}
-            unit="мм рт. ст."
-            value={current.systolic}
-          />
-          <View style={styles.divider} />
-          <MetricRow
-            disabled={seriesFull}
-            icon="arrow.down.circle"
-            iconColor={Palette.orange}
-            label="Диастолическое"
-            onPress={() => setActiveMetric('diastolic')}
-            unit="мм рт. ст."
-            value={current.diastolic}
-          />
-          <View style={styles.divider} />
-          <MetricRow
-            disabled={seriesFull}
-            icon="waveform.path.ecg"
-            iconColor="#6D78A8"
-            label="Пульс"
-            onPress={() => setActiveMetric('pulse')}
-            unit="уд/мин"
-            value={current.pulse}
-          />
-        </GlassCard>
-
-        {mode === 'series' ? (
-          <View style={styles.seriesBlock}>
-            {series.length > 0 ? (
-              <View style={styles.seriesList}>
-                {series.map((reading, index) => (
-                  <View key={`${index}-${reading.systolic}`} style={styles.seriesItem}>
-                    <Text style={styles.seriesIndex}>{index + 1}</Text>
-                    <Text style={styles.seriesValue}>{reading.systolic}</Text>
-                    <Text style={styles.seriesValue}>{reading.diastolic}</Text>
-                    <Text style={styles.seriesPulse}>{reading.pulse} уд/мин</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
+        {mode === 'single' ? (
+          <>
+            <MeasurementEntry value={single} onChange={setSingle} disabled={saving} />
             <Pressable
-              disabled={series.length >= 3}
+              accessibilityRole="button"
+              disabled={saving}
               onPress={addToSeries}
-              style={({ pressed }) => [
-                styles.seriesButton,
-                series.length >= 3 && styles.seriesButtonDisabled,
-                pressed && styles.pressed,
-              ]}>
+              style={({ pressed }) => [styles.seriesButton, styles.singleSeriesButton, pressed && styles.pressed]}>
               <IconSymbol name="plus" size={19} color={Palette.coral} />
-              <Text style={styles.seriesButtonText}>
-                {series.length >= 3 ? 'Серия заполнена' : 'Добавить замер в серию'}
-              </Text>
+              <Text style={styles.seriesButtonText}>Добавить в серию</Text>
             </Pressable>
+          </>
+        ) : (
+          <View style={styles.seriesBlock}>
+            {series.length === 0 ? (
+              <Pressable accessibilityRole="button" disabled={saving} onPress={addAnother} style={styles.seriesButton}>
+                <IconSymbol name="plus" size={19} color={Palette.coral} />
+                <Text style={styles.seriesButtonText}>Добавить замер</Text>
+              </Pressable>
+            ) : null}
+            {series.map((entry, index) => (
+              <View key={entry.id} style={styles.seriesEntry}>
+                <View style={styles.seriesEntryHeader}>
+                  <Text style={styles.seriesEntryTitle}>Замер {index + 1}</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Удалить замер ${index + 1}`}
+                    disabled={saving}
+                    hitSlop={10}
+                    onPress={() => setSeries((items) => items.filter((item) => item.id !== entry.id))}>
+                    <IconSymbol name="trash" size={20} color={Palette.muted} />
+                  </Pressable>
+                </View>
+                <MeasurementEntry
+                  value={entry}
+                  disabled={saving}
+                  onChange={(next) => setSeries((items) => items.map((item) => item.id === entry.id ? { ...next, id: entry.id } : item))}
+                />
+              </View>
+            ))}
+            {series.length > 0 && canAddAnother ? (
+              <Pressable accessibilityRole="button" disabled={saving} onPress={addAnother} style={styles.seriesButton}>
+                <IconSymbol name="plus" size={19} color={Palette.coral} />
+                <Text style={styles.seriesButtonText}>Добавить ещё 1 замер</Text>
+              </Pressable>
+            ) : null}
             <Text style={styles.seriesHint}>
-              Сохраним среднее из 2–3 последовательных измерений.
+              {series.length === 3 ? 'Добавлены три замера. Заполни показатели и сохрани серию.' : 'В серии 2–3 замера. Следующий можно добавить после заполнения предыдущего.'}
             </Text>
+            <Text style={styles.seriesHint}>Дата серии — дата первого замера. Самочувствие и заметка общие для серии.</Text>
           </View>
-        ) : null}
-
-        <Text style={styles.sectionLabel}>ДАТА И ВРЕМЯ</Text>
-        <Pressable
-          onPress={() => setDatePickerVisible(true)}
-          style={({ pressed }) => [styles.dateCard, pressed && styles.pressed]}>
-          <View style={styles.dateIcon}>
-            <IconSymbol name="calendar" size={21} color={Palette.coral} />
-          </View>
-          <View style={styles.dateText}>
-            <Text style={styles.dateValue}>{formatDate(measuredAt)}</Text>
-            <Text style={styles.dateHint}>Подставлено текущее время — можно изменить</Text>
-          </View>
-          <IconSymbol name="chevron.right" size={18} color={Palette.subtle} />
-        </Pressable>
+        )}
 
         <Text style={styles.sectionLabel}>САМОЧУВСТВИЕ</Text>
         <GlassCard contentStyle={styles.wellbeingCard}>
@@ -352,10 +254,10 @@ export default function NewMeasurementScreen() {
           />
         </View>
 
-        {mode === 'series' && previewReadings.length > 0 ? (
+        {mode === 'series' && completedCount > 0 ? (
           <Text style={styles.readyText}>
-            Готово измерений: {previewReadings.length}
-            {previewReadings.length < 2 ? ' — нужен ещё один замер' : ''}
+            Готово измерений: {completedCount}
+            {completedCount < 2 ? ' — нужен ещё один замер' : ''}
           </Text>
         ) : null}
 
@@ -373,99 +275,12 @@ export default function NewMeasurementScreen() {
         </Pressable>
       </ScreenShell>
 
-      {activeMetric && activeConfig ? (
-        <NumberEntrySheet
-          actionLabel={activeMetric === 'pulse' ? 'Готово' : 'Далее'}
-          initialValue={current[activeMetric]}
-          max={activeConfig.max}
-          min={activeConfig.min}
-          onCancel={() => setActiveMetric(null)}
-          onSubmit={updateMetric}
-          title={activeConfig.title}
-          unit={activeConfig.unit}
-          visible
-        />
-      ) : null}
-
       <SaveSuccessOverlay
         onDone={() => router.back()}
         subtitle={mode === 'series' ? 'Серия добавлена в дневник' : 'Измерение добавлено в дневник'}
         visible={saved}
       />
 
-      <Modal
-        animationType="fade"
-        onRequestClose={closeDatePicker}
-        transparent
-        visible={datePickerVisible}>
-        <View style={styles.dateModal}>
-          <Pressable
-            onPress={closeDatePicker}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.dateSheet}>
-            <View style={styles.dateSheetHeader}>
-              <Text style={styles.dateSheetTitle}>Дата и время</Text>
-              <Pressable onPress={closeDatePicker}>
-                <Text style={styles.dateDone}>Готово</Text>
-              </Pressable>
-            </View>
-            {Platform.OS === 'ios' ? (
-              <DateTimePicker
-                display="spinner"
-                locale="ru-RU"
-                mode="datetime"
-                onChange={(_, date) => date && setMeasuredAt(date)}
-                textColor={Palette.text}
-                value={measuredAt}
-              />
-            ) : (
-              <View style={styles.androidDateControls}>
-                <Pressable
-                  onPress={() => setAndroidPickerMode('date')}
-                  style={styles.androidDateButton}>
-                  <Text style={styles.androidDateLabel}>Дата</Text>
-                  <Text style={styles.androidDateValue}>
-                    {new Intl.DateTimeFormat('ru-RU', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    }).format(measuredAt)}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setAndroidPickerMode('time')}
-                  style={styles.androidDateButton}>
-                  <Text style={styles.androidDateLabel}>Время</Text>
-                  <Text style={styles.androidDateValue}>
-                    {new Intl.DateTimeFormat('ru-RU', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    }).format(measuredAt)}
-                  </Text>
-                </Pressable>
-                {androidPickerMode ? (
-                  <DateTimePicker
-                    display="default"
-                    mode={androidPickerMode}
-                    onChange={(event, date) => {
-                      setAndroidPickerMode(null);
-                      if (event.type !== 'dismissed' && date) setMeasuredAt(date);
-                    }}
-                    value={measuredAt}
-                  />
-                ) : null}
-              </View>
-            )}
-            <Pressable
-              onPress={() => setMeasuredAt(new Date())}
-              style={({ pressed }) => [styles.nowButton, pressed && styles.pressed]}>
-              <IconSymbol name="arrow.counterclockwise" size={18} color={Palette.coral} />
-              <Text style={styles.nowText}>Подставить текущее</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </>
   );
 }
@@ -547,56 +362,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 4,
   },
-  metricsCard: {
-    paddingVertical: 3,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 73,
-    backgroundColor: Palette.line,
-  },
   seriesBlock: {
     marginTop: 13,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.xl,
   },
-  seriesList: {
-    gap: 7,
-    marginBottom: 9,
-  },
-  seriesItem: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    paddingHorizontal: 13,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: Palette.line,
-    backgroundColor: Palette.surfaceStrong,
-  },
-  seriesIndex: {
-    width: 26,
-    height: 26,
-    color: Palette.coral,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 26,
-    textAlign: 'center',
-    borderRadius: 9,
-    backgroundColor: Palette.coralSoft,
-  },
-  seriesValue: {
-    color: Palette.text,
-    fontSize: 16,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  seriesPulse: {
-    flex: 1,
-    color: Palette.muted,
-    fontSize: 12,
-    textAlign: 'right',
-  },
+  singleSeriesButton: { marginTop: Spacing.md, marginBottom: Spacing.xl },
+  seriesEntry: { marginBottom: Spacing.lg },
+  seriesEntryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
+  seriesEntryTitle: { color: Palette.text, fontSize: 18, fontWeight: '600' },
   seriesButton: {
     height: 50,
     flexDirection: 'row',
@@ -613,49 +386,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  seriesButtonDisabled: {
-    opacity: 0.55,
-  },
   seriesHint: {
     color: Palette.muted,
     fontSize: 11,
     lineHeight: 16,
     textAlign: 'center',
     marginTop: 7,
-  },
-  dateCard: {
-    minHeight: 76,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.xl,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Palette.line,
-    backgroundColor: Palette.surfaceStrong,
-    ...Shadow.card,
-  },
-  dateIcon: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 15,
-    backgroundColor: Palette.coralSoft,
-  },
-  dateText: {
-    flex: 1,
-    gap: 3,
-  },
-  dateValue: {
-    color: Palette.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  dateHint: {
-    color: Palette.muted,
-    fontSize: 11,
   },
   wellbeingCard: {
     padding: Spacing.md,
@@ -769,69 +505,5 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.99 }],
-  },
-  dateModal: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(24,32,47,0.24)',
-  },
-  dateSheet: {
-    paddingHorizontal: Spacing.screen,
-    paddingTop: Spacing.lg,
-    paddingBottom: 38,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    backgroundColor: Palette.white,
-  },
-  dateSheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 5,
-  },
-  dateSheetTitle: {
-    color: Palette.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  dateDone: {
-    color: Palette.coral,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  nowButton: {
-    height: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    borderRadius: Radius.medium,
-    backgroundColor: Palette.coralSoft,
-  },
-  nowText: {
-    color: Palette.coral,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  androidDateControls: {
-    gap: 9,
-    paddingVertical: 18,
-  },
-  androidDateButton: {
-    minHeight: 64,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.medium,
-    backgroundColor: '#F2F3F6',
-  },
-  androidDateLabel: {
-    color: Palette.muted,
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  androidDateValue: {
-    color: Palette.text,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -18,13 +18,15 @@ export type Reading = {
   pulse: number;
 };
 
+export type MeasurementReading = Reading & { measuredAt?: string };
+
 export type MeasurementDraft = {
   measuredAt: Date;
   wellbeing: number;
   tags: string[];
   note: string;
   mode: MeasurementMode;
-  readings: Reading[];
+  readings: MeasurementReading[];
 };
 
 export type MeasurementSummary = Reading & {
@@ -39,7 +41,7 @@ export type MeasurementSummary = Reading & {
 };
 
 export type MeasurementDetails = MeasurementSummary & {
-  readings: Reading[];
+  readings: MeasurementReading[];
 };
 
 export const WELLBEING_TAGS = [
