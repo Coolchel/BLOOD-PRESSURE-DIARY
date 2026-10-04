@@ -121,6 +121,13 @@
     const averages = Object.fromEntries(['systolic','diastolic','pulse'].map(key => [key, s.readings.reduce((sum,r) => sum+r[key],0)/s.readings.length]));
     return { ...s, averages, ...Object.fromEntries(Object.entries(averages).map(([k,v]) => [k,Math.round(v)])), readingCount:s.readings.length };
   }
+  function withSessionNote(state,id,note) {
+    if(typeof note!=='string')throw new Error('Проверьте текст заметки.');
+    const next=clone(state),item=next.sessions.find(s=>s.id===id);
+    if(!item)throw new Error('Измерение не найдено.');
+    item.note=note;
+    return next;
+  }
   function stats(sessions) {
     const items = sessions.map(summary);
     const averages = Object.fromEntries(['systolic','diastolic','pulse','wellbeing'].map(key => [key,items.length ? items.reduce((sum,s) => sum+(key === 'wellbeing' ? s.wellbeing : s.averages[key]),0)/items.length : 0]));
@@ -231,5 +238,5 @@
     next.copies=[{ date,at:stamp,payload:backup(next) },...(next.copies||[]).filter(c=>c.date!==date)].slice(0,7);
     return next;
   }
-  return { DAY,MAX_SERIES_READINGS,TAGS,KINDS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,stats,inside,phaseFor,filter,ranges,savePhase,baseline,chartPoints,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
+  return { DAY,MAX_SERIES_READINGS,TAGS,KINDS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,inside,phaseFor,filter,ranges,savePhase,baseline,chartPoints,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
 });

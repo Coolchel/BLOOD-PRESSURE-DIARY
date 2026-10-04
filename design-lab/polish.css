@@ -243,6 +243,21 @@ textarea.form-input { min-height: 104px; line-height: 1.65; }
 .home-period-meta { display: block; font-size: 11px; line-height: 1.5; color: var(--muted); }
 .home-period strong { display: block; font-size: 15px; line-height: 1.45; font-weight: 600; margin: 0 0 2px; overflow-wrap: anywhere; }
 .home-period-chevron { width: 16px; height: 16px; color: var(--muted); }
+.phone[data-theme="clarity"] .source-readings-card { padding: 0; overflow: hidden; }
+.source-readings-table { table-layout: fixed; }
+.source-readings-table .source-date-column { width: 32%; }
+.phone[data-theme="clarity"] .source-readings-table th,
+.phone[data-theme="clarity"] .source-readings-table td { text-align: center; padding: 14px 6px; }
+.phone[data-theme="clarity"] .source-readings-table th {
+  background: var(--soft); font-size: 11px; line-height: 1.4; font-weight: 500;
+}
+.source-readings-table time { display: block; font-size: 14px; line-height: 1.4; font-weight: 500; }
+.phone[data-theme="clarity"] .source-readings-table td small {
+  margin-top: 3px; font-size: 11px; line-height: 1.4; font-weight: 400;
+}
+.source-readings-table td strong { font-size: 18px; line-height: 1.4; font-weight: 500; }
+.source-readings-table [data-metric="systolic"] { color: var(--accent); }
+.source-readings-table [data-metric="diastolic"] { color: var(--second); }
 .phone[data-theme="clarity"] .home-chart { border-bottom: 0; padding-bottom: 0; }
 .home-chart .chart-svg { display: block; }
 .phone[data-theme="clarity"] .app-content[data-view="home"] { padding-bottom: 12px; }

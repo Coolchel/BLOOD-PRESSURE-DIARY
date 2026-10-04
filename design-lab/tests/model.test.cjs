@@ -257,3 +257,21 @@ test('inline reading errors identify only invalid fields and preserve valid meas
   const series=[reading(),{...reading(),pulse:''},reading()];
   assert.deepEqual(series.map(M.entryReadingError).map(e=>!!e),[false,true,false]);
 });
+
+test('saved note updates preserve readings, drafts and other records and survive backup restore', () => {
+  let original=seed();
+  const single=M.newDraft(),series=M.newDraft('series');single.note='Single draft';series.note='Series draft';
+  original=M.storeDraft(M.storeDraft(original,single),series);
+  const previous=M.clone(original),id=original.sessions[0].id,note=' Первая строка\nВторая строка <текст> ';
+  const next=M.withSessionNote(original,id,note);
+  assert.deepEqual(original,previous);
+  assert.deepEqual(next.sessions[0],{...previous.sessions[0],note});
+  assert.deepEqual(next.sessions.slice(1),previous.sessions.slice(1));
+  assert.deepEqual(next.drafts,previous.drafts);assert.deepEqual(next.draft,previous.draft);
+  assert.deepEqual(M.stats(next.sessions),M.stats(previous.sessions));
+  assert.equal(M.restore(M.backup(next)).sessions.find(s=>s.id===id).note,note);
+  assert.equal(M.withSessionNote(next,id,'').sessions[0].note,'');
+  assert.throws(()=>M.withSessionNote(original,999999,note),/не найдено/);
+  assert.throws(()=>M.withSessionNote(original,id,null),/текст/);
+  assert.deepEqual(original,previous);
+});
