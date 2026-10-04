@@ -1,0 +1,27 @@
+/* Preview is full size: it does not shorten the phone on small laptop displays. */
+html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+button, a { outline: none !important; }
+body[data-input-mode="keyboard"] :is(button, a):focus-visible { text-decoration: underline; text-underline-offset: 4px; }
+.gallery { grid-template-columns: 410px minmax(480px, 1fr); gap: 64px; align-items: start; }
+.selection { padding-top: 42px; }
+.selection h1 { margin-top: 0; }
+.preview { max-width: 540px; }
+.preview-toolbar { min-height: 40px; gap: 12px; padding: 0 12px 8px; }
+.size-picker button { min-height: 30px; font-size: 11px; padding: 6px 9px; }
+iframe { min-height: 0; height: 912px; }
+.preview-caption { font-size: 11px; line-height: 1.6; padding: 8px 12px; }
+.variant-copy small { line-height: 1.6; }
+@media (max-width: 1000px) {
+  .gallery { grid-template-columns: 330px minmax(444px, 1fr); gap: 24px; }
+}
+@media (max-width: 840px) {
+  .gallery { display: flex; flex-direction: column; gap: 28px; }
+  .selection { padding-top: 0; width: 100%; max-width: 560px; }
+  .preview { width: 100%; max-width: 480px; }
+}
+@media (max-width: 510px) {
+  .preview-toolbar, .preview-caption { padding-left: 0; padding-right: 0; }
+  .preview-toolbar { flex-wrap: wrap; }
+  .preview-caption { flex-wrap: wrap; }
+  .size-picker button[data-width="430"] { display: block; }
+}

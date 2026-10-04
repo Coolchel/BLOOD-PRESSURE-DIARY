@@ -1,0 +1,26 @@
+[
+  {
+    "variant": "calm",
+    "countBefore": 30,
+    "countAfter": 60,
+    "header": "ВАШ ДНЕВНИК\nДавление"
+  },
+  {
+    "variant": "coral",
+    "countBefore": 30,
+    "countAfter": 60,
+    "header": "В РИТМЕ ВАШЕГО ДНЯ\nМой дневник"
+  },
+  {
+    "variant": "night",
+    "countBefore": 30,
+    "countAfter": 60,
+    "header": "ДНЕВНИК ПОКАЗАТЕЛЕЙ\nПульс дня"
+  },
+  {
+    "variant": "clarity",
+    "countBefore": 30,
+    "countAfter": 60,
+    "header": "ЛИЧНЫЕ НАБЛЮДЕНИЯ\nДавление"
+  }
+]

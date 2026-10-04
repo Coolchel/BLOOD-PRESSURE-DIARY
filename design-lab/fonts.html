@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ясно — выбор шрифта</title>
+  <link rel="stylesheet" href="gallery.css"><link rel="stylesheet" href="gallery-polish.css"><link rel="stylesheet" href="fonts.css"><link rel="stylesheet" href="typography.css">
+  <script defer src="typography.js"></script>
+</head>
+<body>
+  <header class="gallery-header"><a href="index.html#clarity" class="wordmark"><span class="logo">∿</span>ЯСНО <span class="wordmark-divider">/</span><span class="wordmark-lab">ВЫБОР ШРИФТА</span></a><a class="header-note" href="index.html#clarity">Вернуться к макету ↗</a></header>
+  <main class="gallery font-gallery">
+    <aside class="selection">
+      <h1>Какой шрифт<br>тебе ближе?</h1>
+      <p class="intro">Переключай шрифты и сравнивай на одном экране.<br>Размеры элементов, цвета и данные одинаковые.<br>Можно открывать разделы и окна внутри телефона.</p>
+      <div class="font-options" role="group" aria-label="Варианты шрифта">
+        <button class="font-option" data-font="current" aria-pressed="false"><span class="font-name">Исходный вариант</span><span class="font-description">Для сравнения с первоначальным макетом</span><span class="font-sample current-sample">Давление 118 / 82</span></button>
+        <button class="font-option" data-font="inter" aria-pressed="false"><span class="font-name">01 · Inter</span><span class="font-description">Строгий и лаконичный</span><span class="font-sample" data-font-sample="inter">Давление 118 / 82</span></button>
+        <button class="font-option selected" data-font="manrope" aria-pressed="true"><span class="font-name">02 · Manrope</span><span class="font-description">Выбран для основного макета</span><span class="font-sample" data-font-sample="manrope">Давление 118 / 82</span></button>
+        <button class="font-option" data-font="golostext" aria-pressed="false"><span class="font-name">03 · Golos Text</span><span class="font-description">Спокойный и открытый</span><span class="font-sample" data-font-sample="golostext">Давление 118 / 82</span></button>
+        <button class="font-option" data-font="nunitosans" aria-pressed="false"><span class="font-name">04 · Nunito Sans</span><span class="font-description">Мягкий и округлый</span><span class="font-sample" data-font-sample="nunitosans">Давление 118 / 82</span></button>
+      </div>
+      <p class="font-note">Manrope выбран для основного макета «Ясно». Здесь можно сравнивать остальные варианты: шрифт меняется сразу, открытый экран и введённые данные сохраняются.</p>
+      <a id="open-font" class="standalone" href="clarity.html" target="_blank" rel="noopener">Открыть выбранный вариант отдельно ↗</a>
+    </aside>
+    <section class="preview" aria-label="Макет для сравнения шрифтов">
+      <div class="preview-toolbar"><span id="font-name" aria-live="polite">Manrope</span><div class="size-picker" role="group" aria-label="Размер экрана телефона"><button data-width="360" aria-pressed="false">360</button><button data-width="390" aria-pressed="false">390</button><button data-width="402" class="active" aria-pressed="true">17 Pro</button><button data-width="430" aria-pressed="false">430</button></div></div>
+      <iframe id="phone-preview" src="clarity.html?embed=1&amp;width=402" title="Ясно — сравнение шрифтов"></iframe>
+      <div class="preview-caption"><span>Нажимай на экран и переключай шрифты слева</span><span id="screen-size">iPhone 17 Pro · 402 × 874</span></div>
+    </section>
+  </main>
+  <noscript>Включите JavaScript, чтобы переключать шрифты.</noscript>
+</body>
+</html>

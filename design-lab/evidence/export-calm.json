@@ -1,0 +1,1969 @@
+{
+  "app": "Давление",
+  "version": 1,
+  "exportedAt": "2026-10-02T09:59:10.395Z",
+  "sessions": [
+    {
+      "id": 1,
+      "measured_at": "2026-07-05T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "series",
+      "created_at": "2026-07-05T05:15:00.000Z"
+    },
+    {
+      "id": 2,
+      "measured_at": "2026-07-06T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-06T05:15:00.000Z"
+    },
+    {
+      "id": 3,
+      "measured_at": "2026-07-07T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-07T05:15:00.000Z"
+    },
+    {
+      "id": 4,
+      "measured_at": "2026-07-08T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-08T05:15:00.000Z"
+    },
+    {
+      "id": 5,
+      "measured_at": "2026-07-09T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-09T05:15:00.000Z"
+    },
+    {
+      "id": 6,
+      "measured_at": "2026-07-10T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-10T05:15:00.000Z"
+    },
+    {
+      "id": 7,
+      "measured_at": "2026-07-11T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-11T05:15:00.000Z"
+    },
+    {
+      "id": 8,
+      "measured_at": "2026-07-12T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-12T05:15:00.000Z"
+    },
+    {
+      "id": 9,
+      "measured_at": "2026-07-13T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-07-13T05:15:00.000Z"
+    },
+    {
+      "id": 10,
+      "measured_at": "2026-07-14T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "series",
+      "created_at": "2026-07-14T05:15:00.000Z"
+    },
+    {
+      "id": 11,
+      "measured_at": "2026-07-15T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-15T05:15:00.000Z"
+    },
+    {
+      "id": 12,
+      "measured_at": "2026-07-16T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-16T05:15:00.000Z"
+    },
+    {
+      "id": 13,
+      "measured_at": "2026-07-17T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-17T05:15:00.000Z"
+    },
+    {
+      "id": 14,
+      "measured_at": "2026-07-18T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-18T05:15:00.000Z"
+    },
+    {
+      "id": 15,
+      "measured_at": "2026-07-19T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-19T05:15:00.000Z"
+    },
+    {
+      "id": 16,
+      "measured_at": "2026-07-20T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-20T05:15:00.000Z"
+    },
+    {
+      "id": 17,
+      "measured_at": "2026-07-21T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-07-21T05:15:00.000Z"
+    },
+    {
+      "id": 18,
+      "measured_at": "2026-07-22T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-22T05:15:00.000Z"
+    },
+    {
+      "id": 19,
+      "measured_at": "2026-07-23T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "series",
+      "created_at": "2026-07-23T05:15:00.000Z"
+    },
+    {
+      "id": 20,
+      "measured_at": "2026-07-24T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-24T05:15:00.000Z"
+    },
+    {
+      "id": 21,
+      "measured_at": "2026-07-25T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-25T05:15:00.000Z"
+    },
+    {
+      "id": 22,
+      "measured_at": "2026-07-26T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-26T05:15:00.000Z"
+    },
+    {
+      "id": 23,
+      "measured_at": "2026-07-27T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-27T05:15:00.000Z"
+    },
+    {
+      "id": 24,
+      "measured_at": "2026-07-28T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-28T05:15:00.000Z"
+    },
+    {
+      "id": 25,
+      "measured_at": "2026-07-29T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-07-29T05:15:00.000Z"
+    },
+    {
+      "id": 26,
+      "measured_at": "2026-07-30T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-30T05:15:00.000Z"
+    },
+    {
+      "id": 27,
+      "measured_at": "2026-07-31T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-07-31T05:15:00.000Z"
+    },
+    {
+      "id": 28,
+      "measured_at": "2026-08-01T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "series",
+      "created_at": "2026-08-01T05:15:00.000Z"
+    },
+    {
+      "id": 29,
+      "measured_at": "2026-08-02T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-02T05:15:00.000Z"
+    },
+    {
+      "id": 30,
+      "measured_at": "2026-08-03T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-03T05:15:00.000Z"
+    },
+    {
+      "id": 31,
+      "measured_at": "2026-08-04T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-04T05:15:00.000Z"
+    },
+    {
+      "id": 32,
+      "measured_at": "2026-08-05T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-05T05:15:00.000Z"
+    },
+    {
+      "id": 33,
+      "measured_at": "2026-08-06T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-08-06T05:15:00.000Z"
+    },
+    {
+      "id": 34,
+      "measured_at": "2026-08-07T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-07T05:15:00.000Z"
+    },
+    {
+      "id": 35,
+      "measured_at": "2026-08-08T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-08T05:15:00.000Z"
+    },
+    {
+      "id": 36,
+      "measured_at": "2026-08-09T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-09T05:15:00.000Z"
+    },
+    {
+      "id": 37,
+      "measured_at": "2026-08-10T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "series",
+      "created_at": "2026-08-10T05:15:00.000Z"
+    },
+    {
+      "id": 38,
+      "measured_at": "2026-08-11T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-11T05:15:00.000Z"
+    },
+    {
+      "id": 39,
+      "measured_at": "2026-08-12T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-12T05:15:00.000Z"
+    },
+    {
+      "id": 40,
+      "measured_at": "2026-08-13T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-13T05:15:00.000Z"
+    },
+    {
+      "id": 41,
+      "measured_at": "2026-08-14T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-08-14T05:15:00.000Z"
+    },
+    {
+      "id": 42,
+      "measured_at": "2026-08-15T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-15T05:15:00.000Z"
+    },
+    {
+      "id": 43,
+      "measured_at": "2026-08-16T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-16T05:15:00.000Z"
+    },
+    {
+      "id": 44,
+      "measured_at": "2026-08-17T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-17T05:15:00.000Z"
+    },
+    {
+      "id": 45,
+      "measured_at": "2026-08-18T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-18T05:15:00.000Z"
+    },
+    {
+      "id": 46,
+      "measured_at": "2026-08-19T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "series",
+      "created_at": "2026-08-19T05:15:00.000Z"
+    },
+    {
+      "id": 47,
+      "measured_at": "2026-08-20T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-20T05:15:00.000Z"
+    },
+    {
+      "id": 48,
+      "measured_at": "2026-08-21T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-21T05:15:00.000Z"
+    },
+    {
+      "id": 49,
+      "measured_at": "2026-08-22T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-08-22T05:15:00.000Z"
+    },
+    {
+      "id": 50,
+      "measured_at": "2026-08-23T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-23T05:15:00.000Z"
+    },
+    {
+      "id": 51,
+      "measured_at": "2026-08-24T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-24T05:15:00.000Z"
+    },
+    {
+      "id": 52,
+      "measured_at": "2026-08-25T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-25T05:15:00.000Z"
+    },
+    {
+      "id": 53,
+      "measured_at": "2026-08-26T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-26T05:15:00.000Z"
+    },
+    {
+      "id": 54,
+      "measured_at": "2026-08-27T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-27T05:15:00.000Z"
+    },
+    {
+      "id": 55,
+      "measured_at": "2026-08-28T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "series",
+      "created_at": "2026-08-28T05:15:00.000Z"
+    },
+    {
+      "id": 56,
+      "measured_at": "2026-08-29T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-29T05:15:00.000Z"
+    },
+    {
+      "id": 57,
+      "measured_at": "2026-08-30T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-08-30T05:15:00.000Z"
+    },
+    {
+      "id": 58,
+      "measured_at": "2026-08-31T05:15:00.000Z",
+      "wellbeing": 6,
+      "tags": [
+        "После кофе"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-08-31T05:15:00.000Z"
+    },
+    {
+      "id": 59,
+      "measured_at": "2026-09-01T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-01T05:15:00.000Z"
+    },
+    {
+      "id": 60,
+      "measured_at": "2026-09-02T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-02T05:15:00.000Z"
+    },
+    {
+      "id": 61,
+      "measured_at": "2026-09-03T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-03T05:15:00.000Z"
+    },
+    {
+      "id": 62,
+      "measured_at": "2026-09-04T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-04T05:15:00.000Z"
+    },
+    {
+      "id": 63,
+      "measured_at": "2026-09-05T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-05T05:15:00.000Z"
+    },
+    {
+      "id": 64,
+      "measured_at": "2026-09-06T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "series",
+      "created_at": "2026-09-06T05:15:00.000Z"
+    },
+    {
+      "id": 65,
+      "measured_at": "2026-09-07T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-09-07T05:15:00.000Z"
+    },
+    {
+      "id": 66,
+      "measured_at": "2026-09-08T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-08T05:15:00.000Z"
+    },
+    {
+      "id": 67,
+      "measured_at": "2026-09-09T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-09T05:15:00.000Z"
+    },
+    {
+      "id": 68,
+      "measured_at": "2026-09-10T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-10T05:15:00.000Z"
+    },
+    {
+      "id": 69,
+      "measured_at": "2026-09-11T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-11T05:15:00.000Z"
+    },
+    {
+      "id": 70,
+      "measured_at": "2026-09-12T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-12T05:15:00.000Z"
+    },
+    {
+      "id": 71,
+      "measured_at": "2026-09-13T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-13T05:15:00.000Z"
+    },
+    {
+      "id": 72,
+      "measured_at": "2026-09-14T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-14T05:15:00.000Z"
+    },
+    {
+      "id": 73,
+      "measured_at": "2026-09-15T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "series",
+      "created_at": "2026-09-15T05:15:00.000Z"
+    },
+    {
+      "id": 74,
+      "measured_at": "2026-09-16T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-16T05:15:00.000Z"
+    },
+    {
+      "id": 75,
+      "measured_at": "2026-09-17T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-17T05:15:00.000Z"
+    },
+    {
+      "id": 76,
+      "measured_at": "2026-09-18T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-18T05:15:00.000Z"
+    },
+    {
+      "id": 77,
+      "measured_at": "2026-09-19T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-19T05:15:00.000Z"
+    },
+    {
+      "id": 78,
+      "measured_at": "2026-09-20T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-20T05:15:00.000Z"
+    },
+    {
+      "id": 79,
+      "measured_at": "2026-09-21T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-21T05:15:00.000Z"
+    },
+    {
+      "id": 80,
+      "measured_at": "2026-09-22T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-22T05:15:00.000Z"
+    },
+    {
+      "id": 81,
+      "measured_at": "2026-09-23T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-09-23T05:15:00.000Z"
+    },
+    {
+      "id": 82,
+      "measured_at": "2026-09-24T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "series",
+      "created_at": "2026-09-24T05:15:00.000Z"
+    },
+    {
+      "id": 83,
+      "measured_at": "2026-09-25T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-25T05:15:00.000Z"
+    },
+    {
+      "id": 84,
+      "measured_at": "2026-09-26T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-26T05:15:00.000Z"
+    },
+    {
+      "id": 85,
+      "measured_at": "2026-09-27T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-27T05:15:00.000Z"
+    },
+    {
+      "id": 86,
+      "measured_at": "2026-09-28T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-28T05:15:00.000Z"
+    },
+    {
+      "id": 87,
+      "measured_at": "2026-09-29T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-29T05:15:00.000Z"
+    },
+    {
+      "id": 88,
+      "measured_at": "2026-09-30T05:15:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-09-30T05:15:00.000Z"
+    },
+    {
+      "id": 89,
+      "measured_at": "2026-10-01T05:15:00.000Z",
+      "wellbeing": 8,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "После отдыха. Измерение сидя.",
+      "mode": "single",
+      "created_at": "2026-10-01T05:15:00.000Z"
+    },
+    {
+      "id": 90,
+      "measured_at": "2026-10-02T05:15:00.000Z",
+      "wellbeing": 9,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "",
+      "mode": "single",
+      "created_at": "2026-10-02T05:15:00.000Z"
+    },
+    {
+      "id": 91,
+      "measured_at": "2026-10-02T09:44:00.000Z",
+      "wellbeing": 7,
+      "tags": [],
+      "note": "Проверка одиночного замера",
+      "mode": "single",
+      "created_at": "2026-10-02T09:44:00.000Z"
+    },
+    {
+      "id": 92,
+      "measured_at": "2026-10-02T09:47:00.000Z",
+      "wellbeing": 7,
+      "tags": [
+        "Спокойно"
+      ],
+      "note": "Заметка изменена и сохранена",
+      "mode": "series",
+      "created_at": "2026-10-02T09:47:00.000Z"
+    }
+  ],
+  "readings": [
+    {
+      "session_id": 1,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 80,
+      "pulse": 74,
+      "measured_at": "2026-07-05T05:15:00.000Z"
+    },
+    {
+      "session_id": 1,
+      "position": 1,
+      "systolic": 120,
+      "diastolic": 78,
+      "pulse": 75,
+      "measured_at": "2026-07-05T05:17:00.000Z"
+    },
+    {
+      "session_id": 1,
+      "position": 2,
+      "systolic": 119,
+      "diastolic": 78,
+      "pulse": 76,
+      "measured_at": "2026-07-05T05:19:00.000Z"
+    },
+    {
+      "session_id": 2,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 80,
+      "pulse": 73,
+      "measured_at": "2026-07-06T05:15:00.000Z"
+    },
+    {
+      "session_id": 3,
+      "position": 0,
+      "systolic": 127,
+      "diastolic": 81,
+      "pulse": 69,
+      "measured_at": "2026-07-07T05:15:00.000Z"
+    },
+    {
+      "session_id": 4,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 82,
+      "pulse": 65,
+      "measured_at": "2026-07-08T05:15:00.000Z"
+    },
+    {
+      "session_id": 5,
+      "position": 0,
+      "systolic": 123,
+      "diastolic": 82,
+      "pulse": 63,
+      "measured_at": "2026-07-09T05:15:00.000Z"
+    },
+    {
+      "session_id": 6,
+      "position": 0,
+      "systolic": 119,
+      "diastolic": 80,
+      "pulse": 62,
+      "measured_at": "2026-07-10T05:15:00.000Z"
+    },
+    {
+      "session_id": 7,
+      "position": 0,
+      "systolic": 116,
+      "diastolic": 78,
+      "pulse": 64,
+      "measured_at": "2026-07-11T05:15:00.000Z"
+    },
+    {
+      "session_id": 8,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 76,
+      "pulse": 68,
+      "measured_at": "2026-07-12T05:15:00.000Z"
+    },
+    {
+      "session_id": 9,
+      "position": 0,
+      "systolic": 117,
+      "diastolic": 75,
+      "pulse": 72,
+      "measured_at": "2026-07-13T05:15:00.000Z"
+    },
+    {
+      "session_id": 10,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 76,
+      "pulse": 74,
+      "measured_at": "2026-07-14T05:15:00.000Z"
+    },
+    {
+      "session_id": 10,
+      "position": 1,
+      "systolic": 120,
+      "diastolic": 74,
+      "pulse": 75,
+      "measured_at": "2026-07-14T05:17:00.000Z"
+    },
+    {
+      "session_id": 10,
+      "position": 2,
+      "systolic": 119,
+      "diastolic": 74,
+      "pulse": 76,
+      "measured_at": "2026-07-14T05:19:00.000Z"
+    },
+    {
+      "session_id": 11,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 74,
+      "pulse": 73,
+      "measured_at": "2026-07-15T05:15:00.000Z"
+    },
+    {
+      "session_id": 12,
+      "position": 0,
+      "systolic": 127,
+      "diastolic": 76,
+      "pulse": 71,
+      "measured_at": "2026-07-16T05:15:00.000Z"
+    },
+    {
+      "session_id": 13,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 77,
+      "pulse": 67,
+      "measured_at": "2026-07-17T05:15:00.000Z"
+    },
+    {
+      "session_id": 14,
+      "position": 0,
+      "systolic": 123,
+      "diastolic": 79,
+      "pulse": 63,
+      "measured_at": "2026-07-18T05:15:00.000Z"
+    },
+    {
+      "session_id": 15,
+      "position": 0,
+      "systolic": 119,
+      "diastolic": 81,
+      "pulse": 62,
+      "measured_at": "2026-07-19T05:15:00.000Z"
+    },
+    {
+      "session_id": 16,
+      "position": 0,
+      "systolic": 116,
+      "diastolic": 82,
+      "pulse": 63,
+      "measured_at": "2026-07-20T05:15:00.000Z"
+    },
+    {
+      "session_id": 17,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 82,
+      "pulse": 66,
+      "measured_at": "2026-07-21T05:15:00.000Z"
+    },
+    {
+      "session_id": 18,
+      "position": 0,
+      "systolic": 117,
+      "diastolic": 81,
+      "pulse": 70,
+      "measured_at": "2026-07-22T05:15:00.000Z"
+    },
+    {
+      "session_id": 19,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 81,
+      "pulse": 73,
+      "measured_at": "2026-07-23T05:15:00.000Z"
+    },
+    {
+      "session_id": 19,
+      "position": 1,
+      "systolic": 120,
+      "diastolic": 79,
+      "pulse": 74,
+      "measured_at": "2026-07-23T05:17:00.000Z"
+    },
+    {
+      "session_id": 19,
+      "position": 2,
+      "systolic": 119,
+      "diastolic": 79,
+      "pulse": 75,
+      "measured_at": "2026-07-23T05:19:00.000Z"
+    },
+    {
+      "session_id": 20,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 77,
+      "pulse": 74,
+      "measured_at": "2026-07-24T05:15:00.000Z"
+    },
+    {
+      "session_id": 21,
+      "position": 0,
+      "systolic": 127,
+      "diastolic": 75,
+      "pulse": 72,
+      "measured_at": "2026-07-25T05:15:00.000Z"
+    },
+    {
+      "session_id": 22,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 74,
+      "pulse": 68,
+      "measured_at": "2026-07-26T05:15:00.000Z"
+    },
+    {
+      "session_id": 23,
+      "position": 0,
+      "systolic": 123,
+      "diastolic": 74,
+      "pulse": 65,
+      "measured_at": "2026-07-27T05:15:00.000Z"
+    },
+    {
+      "session_id": 24,
+      "position": 0,
+      "systolic": 119,
+      "diastolic": 75,
+      "pulse": 62,
+      "measured_at": "2026-07-28T05:15:00.000Z"
+    },
+    {
+      "session_id": 25,
+      "position": 0,
+      "systolic": 116,
+      "diastolic": 77,
+      "pulse": 62,
+      "measured_at": "2026-07-29T05:15:00.000Z"
+    },
+    {
+      "session_id": 26,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 79,
+      "pulse": 65,
+      "measured_at": "2026-07-30T05:15:00.000Z"
+    },
+    {
+      "session_id": 27,
+      "position": 0,
+      "systolic": 117,
+      "diastolic": 81,
+      "pulse": 69,
+      "measured_at": "2026-07-31T05:15:00.000Z"
+    },
+    {
+      "session_id": 28,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 84,
+      "pulse": 72,
+      "measured_at": "2026-08-01T05:15:00.000Z"
+    },
+    {
+      "session_id": 28,
+      "position": 1,
+      "systolic": 120,
+      "diastolic": 82,
+      "pulse": 73,
+      "measured_at": "2026-08-01T05:17:00.000Z"
+    },
+    {
+      "session_id": 28,
+      "position": 2,
+      "systolic": 119,
+      "diastolic": 82,
+      "pulse": 74,
+      "measured_at": "2026-08-01T05:19:00.000Z"
+    },
+    {
+      "session_id": 29,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 82,
+      "pulse": 74,
+      "measured_at": "2026-08-02T05:15:00.000Z"
+    },
+    {
+      "session_id": 30,
+      "position": 0,
+      "systolic": 127,
+      "diastolic": 81,
+      "pulse": 73,
+      "measured_at": "2026-08-03T05:15:00.000Z"
+    },
+    {
+      "session_id": 31,
+      "position": 0,
+      "systolic": 133,
+      "diastolic": 84,
+      "pulse": 75,
+      "measured_at": "2026-08-04T05:15:00.000Z"
+    },
+    {
+      "session_id": 32,
+      "position": 0,
+      "systolic": 130,
+      "diastolic": 82,
+      "pulse": 71,
+      "measured_at": "2026-08-05T05:15:00.000Z"
+    },
+    {
+      "session_id": 33,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 80,
+      "pulse": 68,
+      "measured_at": "2026-08-06T05:15:00.000Z"
+    },
+    {
+      "session_id": 34,
+      "position": 0,
+      "systolic": 123,
+      "diastolic": 78,
+      "pulse": 67,
+      "measured_at": "2026-08-07T05:15:00.000Z"
+    },
+    {
+      "session_id": 35,
+      "position": 0,
+      "systolic": 122,
+      "diastolic": 78,
+      "pulse": 69,
+      "measured_at": "2026-08-08T05:15:00.000Z"
+    },
+    {
+      "session_id": 36,
+      "position": 0,
+      "systolic": 124,
+      "diastolic": 79,
+      "pulse": 72,
+      "measured_at": "2026-08-09T05:15:00.000Z"
+    },
+    {
+      "session_id": 37,
+      "position": 0,
+      "systolic": 132,
+      "diastolic": 82,
+      "pulse": 76,
+      "measured_at": "2026-08-10T05:15:00.000Z"
+    },
+    {
+      "session_id": 37,
+      "position": 1,
+      "systolic": 127,
+      "diastolic": 80,
+      "pulse": 77,
+      "measured_at": "2026-08-10T05:17:00.000Z"
+    },
+    {
+      "session_id": 37,
+      "position": 2,
+      "systolic": 126,
+      "diastolic": 80,
+      "pulse": 78,
+      "measured_at": "2026-08-10T05:19:00.000Z"
+    },
+    {
+      "session_id": 38,
+      "position": 0,
+      "systolic": 132,
+      "diastolic": 82,
+      "pulse": 79,
+      "measured_at": "2026-08-11T05:15:00.000Z"
+    },
+    {
+      "session_id": 39,
+      "position": 0,
+      "systolic": 134,
+      "diastolic": 84,
+      "pulse": 79,
+      "measured_at": "2026-08-12T05:15:00.000Z"
+    },
+    {
+      "session_id": 40,
+      "position": 0,
+      "systolic": 133,
+      "diastolic": 85,
+      "pulse": 76,
+      "measured_at": "2026-08-13T05:15:00.000Z"
+    },
+    {
+      "session_id": 41,
+      "position": 0,
+      "systolic": 130,
+      "diastolic": 86,
+      "pulse": 72,
+      "measured_at": "2026-08-14T05:15:00.000Z"
+    },
+    {
+      "session_id": 42,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 86,
+      "pulse": 69,
+      "measured_at": "2026-08-15T05:15:00.000Z"
+    },
+    {
+      "session_id": 43,
+      "position": 0,
+      "systolic": 123,
+      "diastolic": 84,
+      "pulse": 67,
+      "measured_at": "2026-08-16T05:15:00.000Z"
+    },
+    {
+      "session_id": 44,
+      "position": 0,
+      "systolic": 122,
+      "diastolic": 82,
+      "pulse": 68,
+      "measured_at": "2026-08-17T05:15:00.000Z"
+    },
+    {
+      "session_id": 45,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 80,
+      "pulse": 71,
+      "measured_at": "2026-08-18T05:15:00.000Z"
+    },
+    {
+      "session_id": 46,
+      "position": 0,
+      "systolic": 133,
+      "diastolic": 81,
+      "pulse": 75,
+      "measured_at": "2026-08-19T05:15:00.000Z"
+    },
+    {
+      "session_id": 46,
+      "position": 1,
+      "systolic": 128,
+      "diastolic": 79,
+      "pulse": 76,
+      "measured_at": "2026-08-19T05:17:00.000Z"
+    },
+    {
+      "session_id": 46,
+      "position": 2,
+      "systolic": 127,
+      "diastolic": 79,
+      "pulse": 77,
+      "measured_at": "2026-08-19T05:19:00.000Z"
+    },
+    {
+      "session_id": 47,
+      "position": 0,
+      "systolic": 132,
+      "diastolic": 78,
+      "pulse": 78,
+      "measured_at": "2026-08-20T05:15:00.000Z"
+    },
+    {
+      "session_id": 48,
+      "position": 0,
+      "systolic": 134,
+      "diastolic": 78,
+      "pulse": 79,
+      "measured_at": "2026-08-21T05:15:00.000Z"
+    },
+    {
+      "session_id": 49,
+      "position": 0,
+      "systolic": 133,
+      "diastolic": 80,
+      "pulse": 77,
+      "measured_at": "2026-08-22T05:15:00.000Z"
+    },
+    {
+      "session_id": 50,
+      "position": 0,
+      "systolic": 130,
+      "diastolic": 81,
+      "pulse": 74,
+      "measured_at": "2026-08-23T05:15:00.000Z"
+    },
+    {
+      "session_id": 51,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 83,
+      "pulse": 70,
+      "measured_at": "2026-08-24T05:15:00.000Z"
+    },
+    {
+      "session_id": 52,
+      "position": 0,
+      "systolic": 123,
+      "diastolic": 85,
+      "pulse": 67,
+      "measured_at": "2026-08-25T05:15:00.000Z"
+    },
+    {
+      "session_id": 53,
+      "position": 0,
+      "systolic": 122,
+      "diastolic": 86,
+      "pulse": 67,
+      "measured_at": "2026-08-26T05:15:00.000Z"
+    },
+    {
+      "session_id": 54,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 86,
+      "pulse": 70,
+      "measured_at": "2026-08-27T05:15:00.000Z"
+    },
+    {
+      "session_id": 55,
+      "position": 0,
+      "systolic": 133,
+      "diastolic": 87,
+      "pulse": 73,
+      "measured_at": "2026-08-28T05:15:00.000Z"
+    },
+    {
+      "session_id": 55,
+      "position": 1,
+      "systolic": 128,
+      "diastolic": 85,
+      "pulse": 74,
+      "measured_at": "2026-08-28T05:17:00.000Z"
+    },
+    {
+      "session_id": 55,
+      "position": 2,
+      "systolic": 127,
+      "diastolic": 85,
+      "pulse": 75,
+      "measured_at": "2026-08-28T05:19:00.000Z"
+    },
+    {
+      "session_id": 56,
+      "position": 0,
+      "systolic": 132,
+      "diastolic": 83,
+      "pulse": 77,
+      "measured_at": "2026-08-29T05:15:00.000Z"
+    },
+    {
+      "session_id": 57,
+      "position": 0,
+      "systolic": 134,
+      "diastolic": 81,
+      "pulse": 79,
+      "measured_at": "2026-08-30T05:15:00.000Z"
+    },
+    {
+      "session_id": 58,
+      "position": 0,
+      "systolic": 133,
+      "diastolic": 79,
+      "pulse": 78,
+      "measured_at": "2026-08-31T05:15:00.000Z"
+    },
+    {
+      "session_id": 59,
+      "position": 0,
+      "systolic": 122,
+      "diastolic": 74,
+      "pulse": 70,
+      "measured_at": "2026-09-01T05:15:00.000Z"
+    },
+    {
+      "session_id": 60,
+      "position": 0,
+      "systolic": 118,
+      "diastolic": 74,
+      "pulse": 66,
+      "measured_at": "2026-09-02T05:15:00.000Z"
+    },
+    {
+      "session_id": 61,
+      "position": 0,
+      "systolic": 116,
+      "diastolic": 75,
+      "pulse": 63,
+      "measured_at": "2026-09-03T05:15:00.000Z"
+    },
+    {
+      "session_id": 62,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 77,
+      "pulse": 62,
+      "measured_at": "2026-09-04T05:15:00.000Z"
+    },
+    {
+      "session_id": 63,
+      "position": 0,
+      "systolic": 118,
+      "diastolic": 79,
+      "pulse": 63,
+      "measured_at": "2026-09-05T05:15:00.000Z"
+    },
+    {
+      "session_id": 64,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 83,
+      "pulse": 67,
+      "measured_at": "2026-09-06T05:15:00.000Z"
+    },
+    {
+      "session_id": 64,
+      "position": 1,
+      "systolic": 121,
+      "diastolic": 81,
+      "pulse": 68,
+      "measured_at": "2026-09-06T05:17:00.000Z"
+    },
+    {
+      "session_id": 64,
+      "position": 2,
+      "systolic": 120,
+      "diastolic": 81,
+      "pulse": 69,
+      "measured_at": "2026-09-06T05:19:00.000Z"
+    },
+    {
+      "session_id": 65,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 82,
+      "pulse": 71,
+      "measured_at": "2026-09-07T05:15:00.000Z"
+    },
+    {
+      "session_id": 66,
+      "position": 0,
+      "systolic": 127,
+      "diastolic": 82,
+      "pulse": 73,
+      "measured_at": "2026-09-08T05:15:00.000Z"
+    },
+    {
+      "session_id": 67,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 81,
+      "pulse": 74,
+      "measured_at": "2026-09-09T05:15:00.000Z"
+    },
+    {
+      "session_id": 68,
+      "position": 0,
+      "systolic": 122,
+      "diastolic": 80,
+      "pulse": 72,
+      "measured_at": "2026-09-10T05:15:00.000Z"
+    },
+    {
+      "session_id": 69,
+      "position": 0,
+      "systolic": 118,
+      "diastolic": 78,
+      "pulse": 68,
+      "measured_at": "2026-09-11T05:15:00.000Z"
+    },
+    {
+      "session_id": 70,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 76,
+      "pulse": 64,
+      "measured_at": "2026-09-12T05:15:00.000Z"
+    },
+    {
+      "session_id": 71,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 74,
+      "pulse": 62,
+      "measured_at": "2026-09-13T05:15:00.000Z"
+    },
+    {
+      "session_id": 72,
+      "position": 0,
+      "systolic": 118,
+      "diastolic": 74,
+      "pulse": 63,
+      "measured_at": "2026-09-14T05:15:00.000Z"
+    },
+    {
+      "session_id": 73,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 77,
+      "pulse": 65,
+      "measured_at": "2026-09-15T05:15:00.000Z"
+    },
+    {
+      "session_id": 73,
+      "position": 1,
+      "systolic": 121,
+      "diastolic": 75,
+      "pulse": 66,
+      "measured_at": "2026-09-15T05:17:00.000Z"
+    },
+    {
+      "session_id": 73,
+      "position": 2,
+      "systolic": 120,
+      "diastolic": 75,
+      "pulse": 67,
+      "measured_at": "2026-09-15T05:19:00.000Z"
+    },
+    {
+      "session_id": 74,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 76,
+      "pulse": 69,
+      "measured_at": "2026-09-16T05:15:00.000Z"
+    },
+    {
+      "session_id": 75,
+      "position": 0,
+      "systolic": 127,
+      "diastolic": 78,
+      "pulse": 73,
+      "measured_at": "2026-09-17T05:15:00.000Z"
+    },
+    {
+      "session_id": 76,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 80,
+      "pulse": 74,
+      "measured_at": "2026-09-18T05:15:00.000Z"
+    },
+    {
+      "session_id": 77,
+      "position": 0,
+      "systolic": 122,
+      "diastolic": 81,
+      "pulse": 73,
+      "measured_at": "2026-09-19T05:15:00.000Z"
+    },
+    {
+      "session_id": 78,
+      "position": 0,
+      "systolic": 118,
+      "diastolic": 82,
+      "pulse": 69,
+      "measured_at": "2026-09-20T05:15:00.000Z"
+    },
+    {
+      "session_id": 79,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 81,
+      "pulse": 66,
+      "measured_at": "2026-09-21T05:15:00.000Z"
+    },
+    {
+      "session_id": 80,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 80,
+      "pulse": 63,
+      "measured_at": "2026-09-22T05:15:00.000Z"
+    },
+    {
+      "session_id": 81,
+      "position": 0,
+      "systolic": 118,
+      "diastolic": 78,
+      "pulse": 62,
+      "measured_at": "2026-09-23T05:15:00.000Z"
+    },
+    {
+      "session_id": 82,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 78,
+      "pulse": 64,
+      "measured_at": "2026-09-24T05:15:00.000Z"
+    },
+    {
+      "session_id": 82,
+      "position": 1,
+      "systolic": 121,
+      "diastolic": 76,
+      "pulse": 65,
+      "measured_at": "2026-09-24T05:17:00.000Z"
+    },
+    {
+      "session_id": 82,
+      "position": 2,
+      "systolic": 120,
+      "diastolic": 76,
+      "pulse": 66,
+      "measured_at": "2026-09-24T05:19:00.000Z"
+    },
+    {
+      "session_id": 83,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 75,
+      "pulse": 68,
+      "measured_at": "2026-09-25T05:15:00.000Z"
+    },
+    {
+      "session_id": 84,
+      "position": 0,
+      "systolic": 127,
+      "diastolic": 74,
+      "pulse": 72,
+      "measured_at": "2026-09-26T05:15:00.000Z"
+    },
+    {
+      "session_id": 85,
+      "position": 0,
+      "systolic": 126,
+      "diastolic": 74,
+      "pulse": 74,
+      "measured_at": "2026-09-27T05:15:00.000Z"
+    },
+    {
+      "session_id": 86,
+      "position": 0,
+      "systolic": 122,
+      "diastolic": 76,
+      "pulse": 74,
+      "measured_at": "2026-09-28T05:15:00.000Z"
+    },
+    {
+      "session_id": 87,
+      "position": 0,
+      "systolic": 118,
+      "diastolic": 78,
+      "pulse": 71,
+      "measured_at": "2026-09-29T05:15:00.000Z"
+    },
+    {
+      "session_id": 88,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 80,
+      "pulse": 67,
+      "measured_at": "2026-09-30T05:15:00.000Z"
+    },
+    {
+      "session_id": 89,
+      "position": 0,
+      "systolic": 115,
+      "diastolic": 81,
+      "pulse": 64,
+      "measured_at": "2026-10-01T05:15:00.000Z"
+    },
+    {
+      "session_id": 90,
+      "position": 0,
+      "systolic": 118,
+      "diastolic": 82,
+      "pulse": 62,
+      "measured_at": "2026-10-02T05:15:00.000Z"
+    },
+    {
+      "session_id": 91,
+      "position": 0,
+      "systolic": 125,
+      "diastolic": 81,
+      "pulse": 72,
+      "measured_at": "2026-10-02T09:44:00.000Z"
+    },
+    {
+      "session_id": 92,
+      "position": 0,
+      "systolic": 130,
+      "diastolic": 85,
+      "pulse": 75,
+      "measured_at": "2026-10-02T09:47:00.000Z"
+    },
+    {
+      "session_id": 92,
+      "position": 1,
+      "systolic": 124,
+      "diastolic": 79,
+      "pulse": 69,
+      "measured_at": "2026-10-02T09:50:00.000Z"
+    },
+    {
+      "session_id": 92,
+      "position": 2,
+      "systolic": 121,
+      "diastolic": 77,
+      "pulse": 67,
+      "measured_at": "2026-10-02T09:53:00.000Z"
+    }
+  ],
+  "phases": [
+    {
+      "id": 4,
+      "kind": "coffee",
+      "title": "Период после редактирования",
+      "started_at": "2026-10-02T09:00:00.000Z",
+      "ended_at": null,
+      "note": "",
+      "created_at": "2026-10-02T09:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "kind": "clean",
+      "title": "Спокойный ритм",
+      "started_at": "2026-09-01T05:15:00.000Z",
+      "ended_at": "2026-10-02T09:00:00.000Z",
+      "note": "Возвращаюсь к режиму без напитков.",
+      "created_at": "2026-09-01T05:15:00.000Z"
+    },
+    {
+      "id": 2,
+      "kind": "coffee",
+      "title": "Утренний кофе",
+      "started_at": "2026-08-04T05:15:00.000Z",
+      "ended_at": "2026-09-01T05:15:00.000Z",
+      "note": "Отмечаю изменения в привычном режиме.",
+      "created_at": "2026-08-04T05:15:00.000Z"
+    },
+    {
+      "id": 1,
+      "kind": "clean",
+      "title": "Без напитков",
+      "started_at": "2026-07-05T05:15:00.000Z",
+      "ended_at": "2026-08-04T05:15:00.000Z",
+      "note": "Базовый период для сравнения.",
+      "created_at": "2026-07-05T05:15:00.000Z"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+[
+  {
+    "variant": "calm",
+    "width": 390,
+    "home": {
+      "overflow": false,
+      "width": 390
+    },
+    "statistics": {
+      "labelsOverlap": false,
+      "overflow": false,
+      "points": 24
+    }
+  },
+  {
+    "variant": "coral",
+    "width": 390,
+    "home": {
+      "overflow": false,
+      "width": 390
+    },
+    "statistics": {
+      "labelsOverlap": false,
+      "overflow": false,
+      "points": 24
+    }
+  },
+  {
+    "variant": "night",
+    "width": 390,
+    "home": {
+      "overflow": false,
+      "width": 390
+    },
+    "statistics": {
+      "labelsOverlap": false,
+      "overflow": false,
+      "points": 24
+    }
+  },
+  {
+    "variant": "clarity",
+    "width": 390,
+    "home": {
+      "overflow": false,
+      "width": 390
+    },
+    "statistics": {
+      "labelsOverlap": false,
+      "overflow": false,
+      "points": 24
+    }
+  },
+  {
+    "variant": "calm",
+    "width": 430,
+    "home": {
+      "overflow": false,
+      "width": 430
+    },
+    "statistics": {
+      "labelsOverlap": false,
+      "overflow": false,
+      "points": 24
+    }
+  },
+  {
+    "variant": "coral",
+    "width": 430,
+    "home": {
+      "overflow": false,
+      "width": 430
+    },
+    "statistics": {
+      "labelsOverlap": false,
+      "overflow": false,
+      "points": 24
+    }
+  },
+  {
+    "variant": "night",
+    "width": 430,
+    "home": {
+      "overflow": false,
+      "width": 430
+    },
+    "statistics": {
+      "labelsOverlap": false,
+      "overflow": false,
+      "points": 24
+    }
+  },
+  {
+    "variant": "clarity",
+    "width": 430,
+    "home": {
+      "overflow": false,
+      "width": 430
+    },
+    "statistics": {
+      "labelsOverlap": false,
+      "overflow": false,
+      "points": 24
+    }
+  }
+]

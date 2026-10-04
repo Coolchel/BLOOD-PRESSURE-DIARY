@@ -1,0 +1,12 @@
+@font-face { font-family: 'Diary Inter'; src: url('vendor/fonts/inter.ttf') format('truetype'); font-style: normal; font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Diary Manrope'; src: url('vendor/fonts/manrope.ttf') format('truetype'); font-style: normal; font-weight: 200 800; font-display: swap; }
+@font-face { font-family: 'Diary Golos Text'; src: url('vendor/fonts/golostext.ttf') format('truetype'); font-style: normal; font-weight: 400 900; font-display: swap; }
+@font-face { font-family: 'Diary Nunito Sans'; src: url('vendor/fonts/nunitosans.ttf') format('truetype'); font-style: normal; font-weight: 200 1000; font-display: swap; }
+.phone[data-font='inter'], [data-font-sample='inter'] { --interface-font: 'Diary Inter', sans-serif; }
+.phone[data-font='manrope'], [data-font-sample='manrope'] { --interface-font: 'Diary Manrope', sans-serif; }
+.phone[data-font='golostext'], [data-font-sample='golostext'] { --interface-font: 'Diary Golos Text', sans-serif; }
+.phone[data-font='nunitosans'], [data-font-sample='nunitosans'] { --interface-font: 'Diary Nunito Sans', sans-serif; }
+.phone[data-theme='clarity'][data-font] { font-family: var(--interface-font); font-optical-sizing: auto; }
+.phone[data-theme='clarity'][data-font] :is(.app-header h1, .section-title, .section-title .small) { font-family: var(--interface-font); }
+.phone[data-theme='clarity'][data-font] :is(.app-header h1, .section-title) { font-weight: 500; letter-spacing: -.7px; }
+[data-font-sample] { font-family: var(--interface-font); }

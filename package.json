@@ -12,6 +12,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "node --test scripts/database.test.cjs",
+    "test:design": "node --test design-lab/tests/model.test.cjs",
+    "design": "node design-lab/serve.cjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
