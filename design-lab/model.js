@@ -135,13 +135,26 @@
   }
   const inside = (s,p) => Date.parse(s.measuredAt) >= Date.parse(p.startedAt) && (p.endedAt === null || Date.parse(s.measuredAt) < Date.parse(p.endedAt));
   const phaseFor = (s,phases) => phases.find(p => inside(s,p));
-  function filter(sessions, { days='all', phase=null, from='', to='', sort='newest', now=Date.now() } = {}) {
+  function historyInterval(preset, now=Date.now()) {
+    if (!['today','7','30'].includes(preset)) return {from:'',to:''};
+    const end=new Date(now),start=new Date(now);
+    start.setDate(start.getDate()-(preset==='today'?0:Number(preset)-1));
+    const day=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+    return {from:day(start),to:day(end)};
+  }
+  function filter(sessions, { days='all', phase=null, from='', to='', sort='newest', now=Date.now(), mode='all', wellbeingMin='', wellbeingMax='', tags=[], withNote=false, withoutPhase=false, phases=[] } = {}) {
     let items = sessions.filter(s => {
       const time = Date.parse(s.measuredAt);
       if (days !== 'all' && (time < now-Number(days)*DAY || time > now)) return false;
       if (phase && !inside(s,phase)) return false;
       if (from && time < new Date(from+'T00:00:00').getTime()) return false;
       if (to) { const end = new Date(to+'T00:00:00'); end.setDate(end.getDate()+1); if (time >= end.getTime()) return false; }
+      if (mode!=='all' && s.mode!==mode) return false;
+      if (wellbeingMin!=='' && s.wellbeing<Number(wellbeingMin)) return false;
+      if (wellbeingMax!=='' && s.wellbeing>Number(wellbeingMax)) return false;
+      if (tags.length && !tags.some(tag=>s.tags.includes(tag))) return false;
+      if (withNote && !s.note.trim()) return false;
+      if (withoutPhase && phaseFor(s,phases)) return false;
       return true;
     });
     if (sort === 'newest' || sort === 'oldest') items.sort((a,b) => (Date.parse(a.measuredAt)-Date.parse(b.measuredAt) || a.id-b.id)*(sort === 'newest' ? -1 : 1));
@@ -238,5 +251,5 @@
     next.copies=[{ date,at:stamp,payload:backup(next) },...(next.copies||[]).filter(c=>c.date!==date)].slice(0,7);
     return next;
   }
-  return { DAY,MAX_SERIES_READINGS,TAGS,KINDS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,inside,phaseFor,filter,ranges,savePhase,baseline,chartPoints,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
+  return { DAY,MAX_SERIES_READINGS,TAGS,KINDS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,inside,phaseFor,historyInterval,filter,ranges,savePhase,baseline,chartPoints,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
 });

@@ -39,6 +39,38 @@ test('7, 30, 90-day filters exclude future entries and adjacent out-of-range rea
     assert.deepEqual(M.filter(records,{days:String(days),now}).map(s=>s.id),[1]);
   });
 });
+test('history shortcuts cover calendar days across month and year boundaries', () => {
+  const stamp=new Date(2027,0,2,18,30).getTime();
+  assert.deepEqual(M.historyInterval('today',stamp),{from:'2027-01-02',to:'2027-01-02'});
+  assert.deepEqual(M.historyInterval('7',stamp),{from:'2026-12-27',to:'2027-01-02'});
+  assert.deepEqual(M.historyInterval('30',stamp),{from:'2026-12-04',to:'2027-01-02'});
+  assert.deepEqual(M.historyInterval('all',stamp),{from:'',to:''});
+  const interval=M.historyInterval('7',stamp);
+  const dates=[new Date(2026,11,26,23,59),new Date(2026,11,27,0,0),new Date(2027,0,2,23,59),new Date(2027,0,3,0,0)];
+  assert.deepEqual(M.filter(dates.map((d,i)=>session([reading(120,d.toISOString())],i+1)),interval).map(s=>s.id),[3,2]);
+});
+test('history combines type, score, any selected tag and nonempty notes without mutating records', () => {
+  const records=[
+    {...session([reading(120)],1),wellbeing:4,tags:['Усталость'],note:'После прогулки'},
+    {...session([reading(122),reading(124)],2),wellbeing:7,tags:['Спокойно'],note:'Серия'},
+    {...session([reading(121)],3),wellbeing:8,tags:['Бодрость'],note:'   '},
+    {...session([reading(125)],4),wellbeing:7,tags:['Спокойно'],note:'Повторный замер'},
+  ];
+  const before=M.clone(records);
+  assert.deepEqual(M.filter(records,{mode:'series'}).map(s=>s.id),[2]);
+  assert.deepEqual(M.filter(records,{wellbeingMin:4,wellbeingMax:7}).map(s=>s.id),[4,2,1]);
+  assert.deepEqual(M.filter(records,{tags:['Усталость','Бодрость']}).map(s=>s.id),[3,1]);
+  assert.deepEqual(M.filter(records,{withNote:true}).map(s=>s.id),[4,2,1]);
+  assert.deepEqual(M.filter(records,{mode:'single',wellbeingMin:7,wellbeingMax:7,tags:['Спокойно'],withNote:true,sort:'systolic-asc'}).map(s=>s.id),[4]);
+  assert.deepEqual(records,before);
+});
+test('history can show a selected observation period or records outside all periods', () => {
+  const phases=[{id:1,startedAt:'2026-10-02T08:00:00.000Z',endedAt:'2026-10-02T09:00:00.000Z'}];
+  const records=[session([reading(120,'2026-10-02T07:59:59.999Z')],1),session([reading()],2),session([reading(120,'2026-10-02T09:00:00.000Z')],3)];
+  assert.deepEqual(M.filter(records,{phase:phases[0]}).map(s=>s.id),[2]);
+  assert.deepEqual(M.filter(records,{withoutPhase:true,phases}).map(s=>s.id),[3,1]);
+  assert.deepEqual(M.filter(records,{withoutPhase:true,phases:[]}).map(s=>s.id),[3,2,1]);
+});
 test('period boundaries are exclusive at the end and each record belongs to one period', () => {
   const state=seed(),s=session([reading(120,state.phases[1].startedAt)]);
   assert.equal(M.phaseFor(s,state.phases).id,2);assert.equal(M.inside(s,state.phases[0]),false);

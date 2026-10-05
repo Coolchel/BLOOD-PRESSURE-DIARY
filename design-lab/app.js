@@ -16,6 +16,8 @@
     heartPulse:'M20 13.5 12 21l-8-7.5C-3.5 6.4 6.1-1.1 12 5.5c5.9-6.6 15.5.9 8 8M3 12h4l2-3 3 6 2-3h7',
     wellbeingGauge:'M4.2 17.2a9 9 0 1 1 15.6 0M6.5 10.5l1.2 1.2M12 5.5v1.8M17.5 10.5l-1.2 1.2M12 15l3-3M10.5 15a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0M7 20h10',
     valuesList:'M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01',
+    singleReading:'M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 12h2l1-3 2 6 1-3h2',
+    chevronDown:'M6 9l6 6 6-6',
     backArrow:'M19 12H5M11 6l-6 6 6 6',
   });
   const I=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${iconPaths[name]||iconPaths.info}"/></svg>`;
@@ -39,7 +41,8 @@
     if(error.message.includes('непустую')&&state&&Array.isArray(state.sessions)&&state.sessions.length===0&&Array.isArray(state.phases)){}
     else {state=M.seed();storageError='Не удалось прочитать сохранённый дневник. Используются тестовые данные; исходное хранилище не перезаписывается.';}
   }
-  const ui={view:'home',id:null,detailReturn:'history',period:'7',scope:'time',metric:'pressure',filters:{sort:'newest',from:'',to:''},limit:30,entry:null,error:'',readingValidation:false,chartSelection:{},undo:null};
+  const defaultHistoryFilters=()=>({sort:'newest',from:'',to:'',interval:'all',mode:'all',phaseId:'all',wellbeingMin:'',wellbeingMax:'',tags:[],withNote:false});
+  const ui={view:'home',id:null,detailReturn:'history',period:'7',scope:'time',metric:'pressure',filters:defaultHistoryFilters(),limit:30,entry:null,error:'',readingValidation:false,chartSelection:{},undo:null};
   let modal=null,toastTimer,saveAnimationTimer,focusBeforeModal;
   document.body.classList.add('theme-'+theme);
   const params=new URLSearchParams(location.search);
@@ -116,6 +119,12 @@
   function saveDraft(){if(!ui.entry)return false;return persist(M.storeDraft(state,ui.entry),false);}
   function recordCard(s){
     const v=M.summary(s),p=M.phaseFor(s,state.phases);
+    if(theme==='clarity'&&ui.view==='history')return `<button class="card record-card clarity-history-record ${s.mode==='series'?'history-series':'history-single'}" data-action="detail" data-id="${s.id}" aria-label="Измерение ${esc(full(s.measuredAt))}, ${v.systolic} на ${v.diastolic}, пульс ${v.pulse}, самочувствие ${s.wellbeing} из 10">
+      <span class="history-record-header"><span class="history-date-block"><time class="history-date" datetime="${esc(s.measuredAt)}">${date(s.measuredAt,{day:'numeric',month:'long'})} <span class="history-date-year">${date(s.measuredAt,{year:'numeric'})}</span></time><span class="history-record-mode">${s.mode==='series'?I('layers')+'Серия · '+readingCount(s.readings.length):I('singleReading')+'Одиночный замер'}</span></span><span class="history-time-block"><time class="history-time" datetime="${esc(s.measuredAt)}">${time(s.measuredAt)}</time>${I('chevron','record-chevron')}</span></span>
+      <span class="history-metrics"><span class="history-pressure"><span class="history-metric-label">${s.mode==='series'?'Среднее давление':'Давление'}</span><span class="history-bp"><span class="bp-upper">${v.systolic}</span><span class="slash">/</span><span class="bp-lower">${v.diastolic}</span></span></span><span class="history-pulse" data-metric="pulse"><span class="history-metric-label">Пульс</span><span class="history-pulse-value">${I('heartPulse')}<strong>${v.pulse}</strong></span></span></span>
+      <span class="history-context">${p?`<span class="history-period" title="${esc(p.title)} · ${esc(range(p))}">${I(kind(p).icon)}<span class="history-period-text"><strong>${esc(p.title)}</strong><small>${range(p)}</small></span></span>`:''}<span class="history-wellbeing">${I('wellbeingGauge')}<span>Самочувствие <strong>${s.wellbeing}<small>/10</small></strong></span></span></span>
+      ${s.note?`<span class="record-note">${esc(s.note)}</span>`:''}
+    </button>`;
     return `<button class="card record-card" data-action="detail" data-id="${s.id}" aria-label="Измерение ${esc(full(s.measuredAt))}, ${v.systolic} на ${v.diastolic}"><div class="record-top"><span>${date(s.measuredAt)} · ${time(s.measuredAt)}</span><span>${s.mode==='series'?'Серия · '+readingCount(s.readings.length):'Один замер'}</span></div><div class="record-values"><span class="record-bp">${v.systolic}<span class="muted"> / </span>${v.diastolic}</span><span class="record-pulse" data-metric="pulse">${I('pulse')}${v.pulse}</span>${I('chevron','record-chevron')}</div><div class="record-foot">${p?`<span class="pill">${esc(p.title)}</span>`:''}<span class="pill">Самочувствие ${s.wellbeing}/10</span></div>${s.note?`<p class="record-note">${esc(s.note.length>80?s.note.slice(0,80)+'…':s.note)}</p>`:''}</button>`;
   }
   const empty=(title,desc,action='')=>`<div class="empty">${I('chart')}<strong>${title}</strong>${desc}${action}</div>`;
@@ -156,9 +165,39 @@
     if(theme==='night')return resume+latestCard+`<div class="night-metrics"><div><strong>${a.count?a.pulse:'—'} <span class="small">уд/мин</span></strong><small>Средний пульс · ${recs(recent.length)}</small></div><div><strong>${a.count?num(a.wellbeing,1):'—'}<span class="small"> / 10</span></strong><small>Среднее самочувствие</small></div></div>`+add+`<div class="section-title">Динамика<button data-action="nav" data-view="statistics">Подробнее ↗</button></div>`+chartMarkup('home','Последние 12 измерений',recent)+averages;
     return (theme==='calm'?`<p class="home-greeting">${date(Date.now(),{weekday:'long',day:'numeric',month:'long'})}</p>`:'')+resume+latestCard+add+(p?`<div class="scope-caption row" style="justify-content:center">${I(kind(p).icon)}<span>Период: ${esc(p.title)}</span></div>`:'')+`<div class="section-title">Динамика<button data-action="nav" data-view="statistics">Вся статистика ↗</button></div>`+chartMarkup('home','Последние 12 измерений',recent)+averages;
   }
+  function historyItems(filters){
+    const phaseId=filters.phaseId||'all',phase=state.phases.find(p=>String(p.id)===phaseId);
+    if(phaseId!=='all'&&phaseId!=='none'&&!phase)return [];
+    return M.filter(state.sessions,{...filters,phase:phase||null,withoutPhase:phaseId==='none',phases:state.phases});
+  }
+  const filterSortKey=sort=>['newest','oldest'].includes(sort)?'date':sort.split('-')[0];
+  const filterSortDirection=sort=>sort==='oldest'||sort.endsWith('-asc')?'asc':'desc';
+  function filterSortLabel(sort){
+    if(sort==='newest')return 'Сначала новые';if(sort==='oldest')return 'Сначала старые';
+    return ({systolic:'Верхнее',diastolic:'Нижнее',pulse:'Пульс'})[filterSortKey(sort)]+(filterSortDirection(sort)==='desc'?' · по убыванию':' · по возрастанию');
+  }
+  function historyFilterChips(f){
+    const chips=[];
+    if(f.from||f.to){
+      const day=value=>date(value+'T12:00',{day:'numeric',month:'short',year:'numeric'});
+      const label=({today:'Сегодня','7':'7 дней','30':'30 дней'})[f.interval]||(f.from&&f.to?day(f.from)+(f.from===f.to?'':' — '+day(f.to)):f.from?'С '+day(f.from):'По '+day(f.to));
+      chips.push({key:'dates',label});
+    }
+    if(f.mode&&f.mode!=='all')chips.push({key:'mode',label:f.mode==='series'?'Серии':'Одиночные'});
+    if(f.phaseId&&f.phaseId!=='all')chips.push({key:'phase',label:f.phaseId==='none'?'Без периода':state.phases.find(p=>String(p.id)===f.phaseId)?.title||'Период удалён'});
+    if(f.wellbeingMin!==''||f.wellbeingMax!=='')chips.push({key:'wellbeing',label:'Самочувствие '+(f.wellbeingMin!==''&&f.wellbeingMin===f.wellbeingMax?f.wellbeingMin+'/10':(f.wellbeingMin||1)+'–'+(f.wellbeingMax||10))});
+    if(f.tags?.length)chips.push({key:'tags',label:f.tags.length===1?f.tags[0]:'Отметки: '+f.tags.length});
+    if(f.withNote)chips.push({key:'note',label:'С заметкой'});
+    if(f.sort!=='newest')chips.push({key:'sort',label:filterSortLabel(f.sort)});
+    return chips;
+  }
+  const activeHistoryFilterCount=()=>historyFilterChips(ui.filters).filter(c=>c.key!=='sort').length;
   function historyScreen(){
-    const items=M.filter(state.sessions,ui.filters),filtered=ui.filters.from||ui.filters.to||ui.filters.sort!=='newest';
-    return `<div class="history-summary"><strong>${items.length}</strong><span>${filtered?'найдено':'в дневнике'}</span></div>${filtered?`<div class="filter-chip">${esc(M.SORTS.find(s=>s[0]===ui.filters.sort)?.[1])} ${ui.filters.from?'· с '+esc(ui.filters.from):''} ${ui.filters.to?'· по '+esc(ui.filters.to):''}<button data-action="reset-filters">Сбросить</button></div>`:''}`+items.slice(0,ui.limit).map(recordCard).join('')+(items.length>ui.limit?`<button class="secondary" style="width:100%" data-action="load-more">Показать ещё · ${ui.limit} из ${items.length}</button>`:'')+(!items.length?empty(filtered?'Ничего не найдено':'История пока пустая',filtered?'Измените даты в фильтрах.':'Сохранённые измерения появятся здесь.'):'');
+    const items=theme==='clarity'?historyItems(ui.filters):M.filter(state.sessions,ui.filters),chips=theme==='clarity'?historyFilterChips(ui.filters):[];
+    const filtered=theme==='clarity'?activeHistoryFilterCount()>0:ui.filters.from||ui.filters.to||ui.filters.sort!=='newest';
+    const summary=theme==='clarity'?`<div class="history-summary clarity-history-summary"><span>${filtered?'Найдено записей':'Записей в дневнике'}</span><strong>${items.length}</strong></div>`:`<div class="history-summary"><strong>${items.length}</strong><span>${filtered?'найдено':'в дневнике'}</span></div>`;
+    const applied=theme==='clarity'?(chips.length?`<div class="history-active-filters" aria-label="Выбранные фильтры">${chips.map(c=>`<button class="history-filter-chip" data-action="remove-history-filter" data-key="${c.key}" aria-label="Убрать: ${esc(c.label)}"><span>${esc(c.label)}</span>${I('close')}</button>`).join('')}<button class="history-filter-reset" data-action="reset-filters">Сбросить все</button></div>`:''):(filtered?`<div class="filter-chip">${esc(M.SORTS.find(s=>s[0]===ui.filters.sort)?.[1])} ${ui.filters.from?'· с '+esc(ui.filters.from):''} ${ui.filters.to?'· по '+esc(ui.filters.to):''}<button data-action="reset-filters">Сбросить</button></div>`:'');
+    return summary+applied+items.slice(0,ui.limit).map(recordCard).join('')+(items.length>ui.limit?`<button class="secondary" style="width:100%" data-action="load-more">${theme==='clarity'?'Показать еще':`Показать ещё · ${ui.limit} из ${items.length}`}</button>`:'')+(!items.length?empty(filtered?'Ничего не найдено':'История пока пустая',filtered?(theme==='clarity'?'Попробуйте убрать один из фильтров.':'Измените даты в фильтрах.'):'Сохранённые измерения появятся здесь.',filtered&&theme==='clarity'?'<button class="secondary" data-action="reset-filters">Сбросить фильтры</button>':''):'');
   }
   function statistics(){
     const selectedPhase=ui.scope==='time'?null:state.phases.find(p=>String(p.id)===ui.scope);
@@ -230,7 +269,7 @@
     const navView=ui.view==='detail'?ui.detailReturn:ui.view;
     const titles={home:concept.home,history:'История',statistics:'Статистика',phases:'Периоды',settings:'Настройки',entry:'Новое измерение',detail:'Измерение',phase:'Период'};
     let actions='';
-    if(ui.view==='history')actions=`<button class="icon-button" data-action="filters" aria-label="Фильтры истории">${I('filter')}</button><button class="icon-button solid" data-action="new" aria-label="Добавить измерение">${I('plus')}</button>`;
+    if(ui.view==='history')actions=`<button class="icon-button history-filter-trigger ${theme==='clarity'&&activeHistoryFilterCount()?'has-filters':''}" data-action="filters" aria-label="Фильтры истории" ${theme==='clarity'&&activeHistoryFilterCount()?'aria-describedby="history-filter-count"':''}>${I('filter')}${theme==='clarity'&&activeHistoryFilterCount()?`<span class="history-filter-badge" aria-hidden="true">${activeHistoryFilterCount()}</span><span class="sr-only" id="history-filter-count">Выбрано фильтров: ${activeHistoryFilterCount()}</span>`:''}</button><button class="icon-button solid" data-action="new" aria-label="Добавить измерение">${I('plus')}</button>`;
     else if(top&&ui.view!=='home'&&ui.view!=='settings')actions=`<button class="icon-button" data-action="${ui.view==='phases'?'phase-editor':'new'}" aria-label="${ui.view==='phases'?'Создать период':'Добавить измерение'}">${I('plus')}</button>`;
     else if(ui.view==='home'&&theme!=='clarity')actions=`<button class="icon-button" data-action="nav" data-view="settings" aria-label="Настройки">${I('settings')}</button>`;
     $('app-header').innerHTML=top?`<h1>${titles[ui.view]}</h1><div class="header-actions">${actions}</div>`:`<div class="header-back"><button class="icon-button back-button" data-action="back" aria-label="Назад">${I(theme==='clarity'?'backArrow':'back')}</button><h1>${titles[ui.view]}</h1></div>`;
@@ -284,21 +323,21 @@
   function selectPoint(id,index){const d=chartData[id],p=d?.points[index],mount=$('readout-'+id);if(!p||!mount)return;ui.chartSelection[id]=index;mount.hidden=false;mount.innerHTML=`<div>${p.count>1?date(p.from)+' — '+date(p.to)+' · '+recs(p.count):full(p.measuredAt)}</div><strong>${d.metric==='pressure'?num(p.systolic,1)+' / '+num(p.diastolic,1)+(theme==='clarity'&&id==='home'?'':' мм рт. ст.'):d.metric==='pulse'?num(p.pulse,1)+' уд/мин':num(p.wellbeing,1)+' из 10'}</strong><div><button data-action="point-records" data-chart="${id}" data-point="${index}">${p.count>1?'Открыть исходные записи':'Открыть измерение'} ${I('chevron')}</button></div>`;}
   let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(drawCharts,50);}).observe(phone);
   function showModal(title,body,actions=''){
-    focusBeforeModal=document.activeElement;$('modal').hidden=false;$('modal').innerHTML=`<section class="sheet ${modal?.type==='datetime'?'datetime-sheet':''}" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"><div class="sheet-handle"></div><div class="sheet-header"><h2 id="sheet-title">${title}</h2><button class="icon-button" data-action="close-modal" aria-label="Закрыть окно">${I('close')}</button></div><div class="sheet-content">${body}</div>${actions?`<div class="sheet-actions">${actions}</div>`:''}</section>`;
+    focusBeforeModal=document.activeElement;$('modal').hidden=false;$('modal').innerHTML=`<section class="sheet ${modal?.type==='datetime'?'datetime-sheet':modal?.type==='filters'&&theme==='clarity'?'history-filters-sheet':''}" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"><div class="sheet-handle"></div><div class="sheet-header"><h2 id="sheet-title">${title}</h2><button class="icon-button" data-action="close-modal" aria-label="Закрыть окно">${I('close')}</button></div><div class="sheet-content">${body}</div>${actions?`<div class="sheet-actions">${actions}</div>`:''}</section>`;
     $('app-content').inert=true;$('app-header').inert=true;$('bottom-nav').inert=true;$('entry-footer').inert=true;
     $('modal').querySelector('.sheet').focus({preventScroll:true});
   }
   function closeModal(){if(modal?.type==='download'){const url=modal.url;setTimeout(()=>URL.revokeObjectURL(url),10000);}if(modal?.wheelTimers)Object.values(modal.wheelTimers).forEach(clearTimeout);modal=null;$('modal').hidden=true;$('modal').innerHTML='';['app-content','app-header','bottom-nav','entry-footer'].forEach(id=>$(id).inert=false);if(focusBeforeModal?.isConnected)focusBeforeModal.focus({preventScroll:true});}
   function confirm(title,body,action,label='Подтвердить'){modal={type:'confirm',action};showModal(title,`<p>${body}</p>`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="confirm">${label}</button>`);}
   const twoDigits=value=>String(value).padStart(2,'0');
-  function calendarMarkup(){
-    const year=modal.month.getFullYear(),month=modal.month.getMonth();
+  function calendarMarkup(calendar=modal){
+    const year=calendar.month.getFullYear(),month=calendar.month.getMonth();
     const first=new Date(year,month,1),offset=(first.getDay()+6)%7;
     const totalDays=new Date(year,month+1,0).getDate();
     const cells=Math.ceil((offset+totalDays)/7)*7,today=local(Date.now()).slice(0,10);
     return `<div class="calendar-heading"><strong>${date(first,{month:'long',year:'numeric'})}</strong><div class="row"><button class="calendar-nav" data-action="calendar-month" data-step="-1" aria-label="Предыдущий месяц">${I('back')}</button><button class="calendar-nav" data-action="calendar-month" data-step="1" aria-label="Следующий месяц">${I('chevron')}</button></div></div><div class="calendar-weekdays" aria-hidden="true">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(day=>`<span>${day}</span>`).join('')}</div><div class="calendar-grid">${Array.from({length:cells},(_,i)=>{
       const day=new Date(year,month,i-offset+1),value=local(day).slice(0,10);
-      return `<button class="calendar-day ${day.getMonth()!==month?'outside':''} ${value===modal.day?'selected':''} ${value===today?'today':''}" data-action="calendar-day" data-value="${value}" aria-label="${esc(date(day,{day:'numeric',month:'long',year:'numeric'}))}" aria-pressed="${value===modal.day}" ${value===today?'aria-current="date"':''}>${day.getDate()}</button>`;
+      return `<button class="calendar-day ${day.getMonth()!==month?'outside':''} ${value===calendar.day?'selected':''} ${value===today?'today':''}" data-action="calendar-day" data-value="${value}" aria-label="${esc(date(day,{day:'numeric',month:'long',year:'numeric'}))}" aria-pressed="${value===calendar.day}" ${value===today?'aria-current="date"':''}>${day.getDate()}</button>`;
     }).join('')}</div>`;
   }
   function timeWheel(field,count,label){
@@ -332,12 +371,108 @@
   }
   function updateCalendar(){
     const focused=document.activeElement?.dataset;
+    if(modal?.type==='filters'){
+      $('filter-calendar-grid').innerHTML=calendarMarkup(modal.calendar);
+      if(focused?.action==='calendar-month')$('filter-calendar-grid').querySelector(`[data-step="${focused.step}"]`)?.focus({preventScroll:true});
+      return;
+    }
     $('calendar-picker').innerHTML=calendarMarkup();
     $('modal').querySelector('.calendar-footer span').textContent=date(modal.day+'T12:00',{day:'numeric',month:'long'});
     if(focused?.action==='calendar-month')$('calendar-picker').querySelector(`[data-step="${focused.step}"]`)?.focus({preventScroll:true});
     else if(focused?.action==='calendar-day')$('calendar-picker').querySelector('.calendar-day.selected')?.focus({preventScroll:true});
   }
-  function filtersModal(){modal={type:'filters'};showModal('Фильтры истории',`<label class="form-label" for="filter-sort">Порядок записей</label><select id="filter-sort" class="form-input">${M.SORTS.map(([v,l])=>`<option value="${v}" ${v===ui.filters.sort?'selected':''}>${l}</option>`).join('')}</select><label class="form-label" for="filter-from">С какой даты</label><input class="form-input" id="filter-from" type="date" value="${ui.filters.from}"><label class="form-label" for="filter-to">По какую дату</label><input class="form-input" id="filter-to" type="date" value="${ui.filters.to}"><p class="form-hint">Обе даты входят в выбранный интервал.</p><div id="modal-error" class="error-box" role="alert"></div><button class="text-button" data-action="reset-filter-fields">Сбросить фильтры</button>`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="apply-filters">Применить</button>`);}
+  function filtersModal(){
+    if(theme==='clarity'){clarityFiltersModal();return;}
+    modal={type:'filters'};showModal('Фильтры истории',`<label class="form-label" for="filter-sort">Порядок записей</label><select id="filter-sort" class="form-input">${M.SORTS.map(([v,l])=>`<option value="${v}" ${v===ui.filters.sort?'selected':''}>${l}</option>`).join('')}</select><label class="form-label" for="filter-from">С какой даты</label><input class="form-input" id="filter-from" type="date" value="${ui.filters.from}"><label class="form-label" for="filter-to">По какую дату</label><input class="form-input" id="filter-to" type="date" value="${ui.filters.to}"><p class="form-hint">Обе даты входят в выбранный интервал.</p><div id="modal-error" class="error-box" role="alert"></div><button class="text-button" data-action="reset-filter-fields">Сбросить фильтры</button>`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="apply-filters">Применить</button>`);
+  }
+  function clarityFiltersModal(){
+    modal={type:'filters',filters:M.clone(ui.filters),calendar:null};
+    const f=modal.filters,extra=!!(f.wellbeingMin||f.wellbeingMax||f.tags.length||f.withNote);
+    const option=(action,value,label,selected,icon='')=>`<button class="history-filter-option ${selected?'active':''}" data-action="${action}" data-value="${value}" aria-pressed="${selected}">${icon?I(icon):''}${label}</button>`;
+    showModal('Фильтры',`<div class="history-filter-form">
+      <section class="history-filter-section"><h3>Дата измерения</h3><div class="history-date-presets" role="group" aria-label="Быстрый выбор дат">${[['all','Все'],['today','Сегодня'],['7','7 дней'],['30','30 дней']].map(([value,label])=>option('history-filter-interval',value,label,f.interval===value)).join('')}</div><div class="history-filter-dates">${[['from','С','Дата начала'],['to','По','Дата окончания']].map(([field,label,name],index)=>`${index?'<span aria-hidden="true">—</span>':''}<div class="history-date-field"><span>${label}</span><input id="filter-${field}" type="hidden" value="${esc(f[field])}"><button id="filter-${field}-trigger" class="history-date-trigger" data-action="history-filter-date" data-field="${field}" aria-label="${name}" aria-controls="filter-calendar-picker" aria-expanded="false"><span></span>${I('calendar')}</button></div>`).join('')}</div><div id="filter-calendar-picker" class="history-calendar-panel" role="group" aria-labelledby="filter-calendar-title" hidden></div><p id="filter-date-error" class="history-filter-error" role="status" hidden></p></section>
+      <section class="history-filter-section"><h3>Тип записи</h3><div class="history-mode-options" role="group" aria-label="Тип записи">${[['all','Все',''],['single','Одиночные','singleReading'],['series','Серии','layers']].map(([value,label,icon])=>option('history-filter-mode',value,label,f.mode===value,icon)).join('')}</div></section>
+      <section class="history-filter-section"><h3 id="filter-phase-label">Период наблюдения</h3>${historyFilterSelect('phase',f.phaseId)}</section>
+      <details class="history-extra-filters" ${extra?'open':''}><summary>Самочувствие и отметки<span class="history-extra-count" id="filter-extra-count"></span>${I('chevron')}</summary><div class="history-extra-content"><h3>Самочувствие</h3><div class="history-wellbeing-range"><label for="filter-wellbeing-min">От<input class="form-input" id="filter-wellbeing-min" type="text" inputmode="numeric" enterkeyhint="next" pattern="[0-9]*" maxlength="2" autocomplete="off" placeholder="1" aria-label="Самочувствие от" aria-describedby="filter-wellbeing-error" value="${esc(f.wellbeingMin)}"></label><span aria-hidden="true">—</span><label for="filter-wellbeing-max">До<input class="form-input" id="filter-wellbeing-max" type="text" inputmode="numeric" enterkeyhint="done" pattern="[0-9]*" maxlength="2" autocomplete="off" placeholder="10" aria-label="Самочувствие до" aria-describedby="filter-wellbeing-error" value="${esc(f.wellbeingMax)}"></label><span class="history-range-unit">из 10</span></div><div id="filter-wellbeing-error" class="reading-validation history-filter-validation" role="alert" hidden>${I('info')}<div><strong>Некорректное самочувствие. Проверьте:</strong><p class="reading-validation-message"></p></div></div><h3>Отметки</h3><p class="history-filter-hint">Подойдёт любая из выбранных отметок.</p><div class="history-filter-tags tag-grid" role="group" aria-label="Отметки измерения">${M.TAGS.map(tag=>`<button class="history-filter-tag tag ${f.tags.includes(tag)?'active':''}" data-action="history-filter-tag" data-value="${esc(tag)}" aria-pressed="${f.tags.includes(tag)}">${esc(tag)}</button>`).join('')}</div><label class="history-note-toggle"><span>${I('file')}Только с заметкой</span><input id="filter-with-note" class="history-note-input sr-only" type="checkbox" ${f.withNote?'checked':''}><span class="history-note-check" aria-hidden="true">${I('check')}</span></label></div></details>
+      <section class="history-filter-section history-sort-section"><h3 id="filter-sort-label">Порядок записей</h3>${historyFilterSelect('sort',filterSortKey(f.sort))}<div class="history-sort-directions" role="group" aria-label="Направление сортировки">${['desc','asc'].map(value=>option('history-filter-sort-direction',value,'',filterSortDirection(f.sort)===value)).join('')}</div></section>
+    </div>`,`<button class="secondary" data-action="reset-filter-fields">Сбросить</button><button class="measure-cta" id="filter-apply" data-action="apply-filters"></button>`);
+    updateHistoryFilterPreview();
+  }
+  function historyFilterSelectOptions(key){
+    if(key==='sort')return [['date','По дате','calendar'],['systolic','По верхнему давлению','up'],['diastolic','По нижнему давлению','down'],['pulse','По пульсу','heartPulse']].map(([value,label,icon])=>({value,label,icon}));
+    return [{value:'all',label:'Все периоды',icon:'layers'},{value:'none',label:'Без периода',icon:'calendar'},...state.phases.slice().sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).map(p=>({value:String(p.id),label:p.title,description:range(p),icon:kind(p).icon}))];
+  }
+  function historyFilterSelect(key,value){
+    const options=historyFilterSelectOptions(key),selected=options.find(option=>option.value===value)||options[0];
+    return `<div class="history-select"><input id="${key==='sort'?'filter-sort-key':'filter-phase'}" type="hidden" value="${esc(value)}"><button class="history-select-trigger" id="filter-${key}-trigger" data-action="history-filter-select" data-key="${key}" aria-haspopup="listbox" aria-controls="filter-${key}-options" aria-expanded="false" aria-labelledby="filter-${key}-label filter-${key}-value"><span id="filter-${key}-icon" class="history-select-icon">${I(selected.icon)}</span><span class="history-select-value" id="filter-${key}-value">${esc(selected.label)}</span>${I('chevronDown','history-select-chevron')}</button><div class="history-select-options" id="filter-${key}-options" role="listbox" aria-labelledby="filter-${key}-label" hidden>${options.map(option=>`<button class="history-select-option" role="option" aria-selected="${option.value===value}" data-action="history-filter-select-option" data-key="${key}" data-value="${esc(option.value)}">${I(option.icon)}<span><strong>${esc(option.label)}</strong>${option.description?`<small>${esc(option.description)}</small>`:''}</span>${I('check','history-select-check')}</button>`).join('')}</div></div>`;
+  }
+  function closeHistoryFilterPopovers(restoreFocus=false){
+    if(modal?.type!=='filters'||theme!=='clarity')return false;
+    const trigger=$('modal').querySelector('.history-select-trigger[aria-expanded="true"],.history-date-trigger[aria-expanded="true"]');
+    $('modal').querySelectorAll('.history-select-options').forEach(list=>list.hidden=true);
+    $('filter-calendar-picker').hidden=true;modal.calendar=null;
+    $('modal').querySelectorAll('.history-select-trigger,.history-date-trigger').forEach(button=>button.setAttribute('aria-expanded','false'));
+    if(restoreFocus)trigger?.focus({preventScroll:true});
+    return !!trigger;
+  }
+  function openHistoryFilterSelect(key){
+    const trigger=$('filter-'+key+'-trigger'),wasOpen=trigger.getAttribute('aria-expanded')==='true';
+    closeHistoryFilterPopovers();if(wasOpen)return;
+    const list=$('filter-'+key+'-options');list.hidden=false;trigger.setAttribute('aria-expanded','true');
+    list.scrollIntoView({block:'nearest'});
+    list.querySelector('[aria-selected="true"]')?.focus({preventScroll:true});
+  }
+  function openHistoryFilterDate(field){
+    const trigger=$('filter-'+field+'-trigger'),wasOpen=trigger.getAttribute('aria-expanded')==='true';
+    closeHistoryFilterPopovers();if(wasOpen)return;
+    const f=modal.filters,value=new Date((f[field]||f[field==='from'?'to':'from']||local(Date.now()).slice(0,10))+'T12:00');
+    modal.calendar={field,day:f[field],month:new Date(value.getFullYear(),value.getMonth(),1)};
+    const picker=$('filter-calendar-picker');
+    picker.innerHTML=`<div class="history-calendar-title"><strong id="filter-calendar-title">${field==='from'?'Дата начала':'Дата окончания'}</strong><button class="calendar-nav" data-action="history-filter-calendar-close" aria-label="Закрыть календарь">${I('close')}</button></div><div id="filter-calendar-grid">${calendarMarkup(modal.calendar)}</div><div class="history-calendar-actions"><button data-action="calendar-today">Сегодня</button><button data-action="history-filter-date-clear">Сбросить дату</button></div>`;
+    picker.hidden=false;trigger.setAttribute('aria-expanded','true');picker.scrollIntoView({block:'nearest'});
+    picker.querySelector('.calendar-day.selected,.calendar-day.today')?.focus({preventScroll:true});
+  }
+  function acceptHistoryFilterDate(value){
+    const field=modal.calendar.field;
+    modal.filters[field]=value;$('filter-'+field).value=value;
+    modal.filters.interval=modal.filters.from||modal.filters.to?'custom':'all';
+    closeHistoryFilterPopovers(true);updateHistoryFilterPreview();
+  }
+  function readHistoryFilterFields(){
+    const f=modal.filters,key=$('filter-sort-key').value,direction=filterSortDirection(f.sort);
+    Object.assign(f,{from:$('filter-from').value,to:$('filter-to').value,phaseId:$('filter-phase').value,wellbeingMin:$('filter-wellbeing-min').value,wellbeingMax:$('filter-wellbeing-max').value,withNote:$('filter-with-note').checked,sort:key==='date'?(direction==='desc'?'newest':'oldest'):key+'-'+direction});
+  }
+  function historyFilterErrors(f){
+    const dateError=f.from&&f.to&&f.from>f.to?'Дата начала должна быть не позже даты окончания.':'';
+    const scores=[f.wellbeingMin,f.wellbeingMax].filter(value=>value!=='').map(Number);
+    const scoreError=scores.some(value=>!Number.isInteger(value)||value<1||value>10)?'Укажите оценку от 1 до 10.':f.wellbeingMin!==''&&f.wellbeingMax!==''&&Number(f.wellbeingMin)>Number(f.wellbeingMax)?'Начальная оценка должна быть не больше конечной.':'';
+    return {dateError,scoreError};
+  }
+  function updateHistoryFilterPreview(){
+    const f=modal.filters,{dateError,scoreError}=historyFilterErrors(f);
+    $('filter-date-error').hidden=!dateError;$('filter-date-error').textContent=dateError;
+    $('filter-wellbeing-error').hidden=!scoreError;$('filter-wellbeing-error').querySelector('.reading-validation-message').textContent=scoreError;
+    ['filter-from-trigger','filter-to-trigger'].forEach(id=>$(id).setAttribute('aria-invalid',String(!!dateError)));
+    ['filter-wellbeing-min','filter-wellbeing-max'].forEach(id=>$(id).setAttribute('aria-invalid',String(!!scoreError)));
+    $('filter-apply').disabled=!!(dateError||scoreError);
+    $('filter-apply').textContent=dateError?'Проверьте даты':scoreError?'Проверьте оценку':'Показать '+recs(historyItems(f).length);
+    const extra=Number(!!(f.wellbeingMin||f.wellbeingMax))+Number(!!f.tags.length)+Number(f.withNote);
+    $('filter-extra-count').textContent=extra?String(extra):'';$('filter-extra-count').hidden=!extra;
+    ['from','to'].forEach(field=>{const button=$('filter-'+field+'-trigger');button.querySelector('span').textContent=f[field]?date(f[field]+'T12:00',{day:'2-digit',month:'2-digit',year:'numeric'}):'Выбрать';button.classList.toggle('is-empty',!f[field]);});
+    ['phase','sort'].forEach(key=>{const value=key==='phase'?f.phaseId:filterSortKey(f.sort),options=historyFilterSelectOptions(key),selected=options.find(option=>option.value===value)||options[0];$('filter-'+key+'-value').textContent=selected.label;$('filter-'+key+'-icon').innerHTML=I(selected.icon);$('filter-'+key+'-options').querySelectorAll('[role="option"]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.value===value)));});
+    $('modal').querySelectorAll('[data-action="history-filter-interval"],[data-action="history-filter-mode"],[data-action="history-filter-tag"],[data-action="history-filter-sort-direction"]').forEach(button=>{
+      const {action,value}=button.dataset,selected=action==='history-filter-interval'?f.interval===value:action==='history-filter-mode'?f.mode===value:action==='history-filter-tag'?f.tags.includes(value):filterSortDirection(f.sort)===value;
+      button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
+      if(action==='history-filter-sort-direction')button.textContent=filterSortKey(f.sort)==='date'?(value==='desc'?'Сначала новые':'Сначала старые'):(value==='desc'?'Сначала большие':'Сначала меньшие');
+    });
+  }
+  function resetHistoryFilterFields(){
+    closeHistoryFilterPopovers();
+    modal.filters=defaultHistoryFilters();
+    ['filter-from','filter-to','filter-wellbeing-min','filter-wellbeing-max'].forEach(id=>$(id).value='');
+    $('filter-phase').value='all';$('filter-sort-key').value='date';$('filter-with-note').checked=false;
+    updateHistoryFilterPreview();
+  }
   function phaseEditor(id=null){
     const p=id===null?{kind:'clean',title:'',startedAt:local(Date.now()),endedAt:null,note:''}:state.phases.find(p=>p.id===id);if(!p)return;
     modal={type:'phase',id};showModal(id===null?'Новый период':'Изменить период',`<label class="form-label" for="phase-title">Название</label><input id="phase-title" class="form-input" maxlength="100" value="${esc(p.title)}" placeholder="Например, спокойная неделя"><label class="form-label" for="phase-kind">Тип периода</label><select id="phase-kind" class="form-input">${M.KINDS.map(k=>`<option value="${k.kind}" ${k.kind===p.kind?'selected':''}>${k.label}</option>`).join('')}</select><label class="form-label" for="phase-start">Дата начала</label><input id="phase-start" type="datetime-local" class="form-input" value="${id===null?p.startedAt:local(p.startedAt)}"><label class="form-label row"><input id="phase-open" type="checkbox" ${p.endedAt===null?'checked':''} data-change="phase-open">Период продолжается</label><div id="phase-end-wrap" ${p.endedAt===null?'hidden':''}><label class="form-label" for="phase-end">Дата завершения</label><input id="phase-end" type="datetime-local" class="form-input" value="${local(p.endedAt||Date.now())}"><p class="form-hint">В период войдут замеры, сделанные до этого времени.</p></div><label class="form-label" for="phase-note">Заметка</label><textarea id="phase-note" class="form-input">${esc(p.note)}</textarea><p class="form-hint">Предыдущий период завершится, когда начнётся новый. Один замер может относиться только к одному периоду.</p><div class="error-box" id="modal-error" role="alert"></div>${id!==null?'<button class="danger-button" data-action="delete-phase" data-id="'+id+'">Удалить период</button>':''}`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="save-phase">Сохранить</button>`);
@@ -372,6 +507,11 @@
   $('import-file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;try{restorePreview(JSON.parse(await file.text()));}catch{modal={type:'error'};showModal('Не удалось прочитать',`<p>Выберите резервную копию JSON приложения «Давление».</p>`,`<button class="measure-cta" data-action="close-modal">Понятно</button>`);}event.target.value='';});
   document.addEventListener('input',event=>{
     const target=event.target;
+    if(theme==='clarity'&&modal?.type==='filters'&&target.closest('.history-filter-form')){
+      readHistoryFilterFields();
+      if(target.id==='filter-from'||target.id==='filter-to')modal.filters.interval=modal.filters.from||modal.filters.to?'custom':'all';
+      updateHistoryFilterPreview();return;
+    }
     if(target.dataset.sessionNote){
       try{persist(M.withSessionNote(state,Number(target.dataset.sessionNote),target.value));}
       catch(error){storageError='Не удалось сохранить заметку: '+error.message;warn();}
@@ -396,7 +536,7 @@
   document.addEventListener('focusout',event=>{
     if(ui.view==='entry'&&event.target.matches('.metric-field input'))updateEntryFeedback(null);
   });
-  document.addEventListener('change',event=>{const target=event.target;if(target.dataset.change==='scope'){ui.scope=target.value;ui.chartSelection={};render();}if(target.dataset.change==='phase-open')$('phase-end-wrap').hidden=target.checked;});
+  document.addEventListener('change',event=>{const target=event.target;if(theme==='clarity'&&modal?.type==='filters'&&target.closest('.history-filter-form')){readHistoryFilterFields();if(target.id==='filter-from'||target.id==='filter-to')modal.filters.interval=modal.filters.from||modal.filters.to?'custom':'all';updateHistoryFilterPreview();return;}if(target.dataset.change==='scope'){ui.scope=target.value;ui.chartSelection={};render();}if(target.dataset.change==='phase-open')$('phase-end-wrap').hidden=target.checked;});
   function action(target){
     const a=target.dataset.action;
     switch(a){
@@ -407,9 +547,9 @@
       case 'new':ui.entry=M.resumeDraft(state);ui.readingValidation=false;navigate('entry');break;
       case 'resume-draft':{const draft=M.resumableDraft(state);if(draft&&persist(M.storeDraft(state,draft),false)){ui.entry=draft;ui.readingValidation=false;navigate('entry');}break;}
       case 'entry-datetime':entryDateTime(+target.dataset.index);break;
-      case 'calendar-month':modal.month=new Date(modal.month.getFullYear(),modal.month.getMonth()+Number(target.dataset.step),1);updateCalendar();break;
-      case 'calendar-day':modal.day=target.dataset.value;{const day=new Date(modal.day+'T12:00');modal.month=new Date(day.getFullYear(),day.getMonth(),1);}updateCalendar();break;
-      case 'calendar-today':{const today=new Date();modal.day=local(today).slice(0,10);modal.month=new Date(today.getFullYear(),today.getMonth(),1);updateCalendar();break;}
+      case 'calendar-month':{const calendar=modal.type==='filters'?modal.calendar:modal;calendar.month=new Date(calendar.month.getFullYear(),calendar.month.getMonth()+Number(target.dataset.step),1);updateCalendar();break;}
+      case 'calendar-day':if(modal.type==='filters')acceptHistoryFilterDate(target.dataset.value);else{modal.day=target.dataset.value;const day=new Date(modal.day+'T12:00');modal.month=new Date(day.getFullYear(),day.getMonth(),1);updateCalendar();}break;
+      case 'calendar-today':{const today=new Date();if(modal.type==='filters')acceptHistoryFilterDate(local(today).slice(0,10));else{modal.day=local(today).slice(0,10);modal.month=new Date(today.getFullYear(),today.getMonth(),1);updateCalendar();}break;}
       case 'time-value':selectTimeValue(target.dataset.field,+target.dataset.value,true);break;
       case 'accept-datetime':{
         const index=modal.index,scroll=$('app-content').scrollTop;
@@ -423,9 +563,31 @@
       }
       case 'close-modal':closeModal();break;
       case 'filters':filtersModal();break;
-      case 'reset-filters':ui.filters={sort:'newest',from:'',to:''};ui.limit=30;render();break;
-      case 'reset-filter-fields':$('filter-sort').value='newest';$('filter-from').value='';$('filter-to').value='';break;
-      case 'apply-filters':{const from=$('filter-from').value,to=$('filter-to').value;if(from&&to&&from>to){$('modal-error').textContent='Дата начала должна быть раньше даты окончания или совпадать с ней.';break;}ui.filters={sort:$('filter-sort').value,from,to};ui.limit=30;closeModal();render();break;}
+      case 'reset-filters':ui.filters=defaultHistoryFilters();ui.limit=30;render();break;
+      case 'remove-history-filter':{
+        const fields={dates:['from','to','interval'],mode:['mode'],phase:['phaseId'],wellbeing:['wellbeingMin','wellbeingMax'],tags:['tags'],note:['withNote'],sort:['sort']},defaults=defaultHistoryFilters();
+        (fields[target.dataset.key]||[]).forEach(key=>ui.filters[key]=defaults[key]);ui.limit=30;render();break;
+      }
+      case 'history-filter-interval':Object.assign(modal.filters,{interval:target.dataset.value},M.historyInterval(target.dataset.value));$('filter-from').value=modal.filters.from;$('filter-to').value=modal.filters.to;updateHistoryFilterPreview();break;
+      case 'history-filter-mode':modal.filters.mode=target.dataset.value;updateHistoryFilterPreview();break;
+      case 'history-filter-date':openHistoryFilterDate(target.dataset.field);break;
+      case 'history-filter-calendar-close':closeHistoryFilterPopovers(true);break;
+      case 'history-filter-date-clear':acceptHistoryFilterDate('');break;
+      case 'history-filter-select':openHistoryFilterSelect(target.dataset.key);break;
+      case 'history-filter-select-option':{
+        const key=target.dataset.key,value=target.dataset.value;
+        if(key==='phase'){modal.filters.phaseId=value;$('filter-phase').value=value;}
+        else{$('filter-sort-key').value=value;const direction=filterSortDirection(modal.filters.sort);modal.filters.sort=value==='date'?(direction==='desc'?'newest':'oldest'):value+'-'+direction;}
+        closeHistoryFilterPopovers(true);updateHistoryFilterPreview();break;
+      }
+      case 'history-filter-tag':{const tag=target.dataset.value;modal.filters.tags=modal.filters.tags.includes(tag)?modal.filters.tags.filter(value=>value!==tag):[...modal.filters.tags,tag];updateHistoryFilterPreview();break;}
+      case 'history-filter-sort-direction':{const key=$('filter-sort-key').value,direction=target.dataset.value;modal.filters.sort=key==='date'?(direction==='desc'?'newest':'oldest'):key+'-'+direction;updateHistoryFilterPreview();break;}
+      case 'reset-filter-fields':if(theme==='clarity')resetHistoryFilterFields();else{$('filter-sort').value='newest';$('filter-from').value='';$('filter-to').value='';}break;
+      case 'apply-filters':{
+        if(theme==='clarity'){readHistoryFilterFields();updateHistoryFilterPreview();const errors=historyFilterErrors(modal.filters);if(errors.dateError||errors.scoreError)break;ui.filters=M.clone(modal.filters);}
+        else{const from=$('filter-from').value,to=$('filter-to').value;if(from&&to&&from>to){$('modal-error').textContent='Дата начала должна быть раньше даты окончания или совпадать с ней.';break;}ui.filters={sort:$('filter-sort').value,from,to};}
+        ui.limit=30;closeModal();render();break;
+      }
       case 'load-more':{const scroll=$('app-content').scrollTop;ui.limit+=30;render();$('app-content').scrollTop=scroll;break;}
       case 'period':ui.period=target.dataset.value;ui.chartSelection={};render();break;
       case 'metric':ui.metric=target.dataset.value;ui.chartSelection={};render();break;
@@ -467,11 +629,16 @@
       case 'about':modal={type:'about'};showModal(concept.name,`<p>${concept.description}</p><p><strong>Все функции:</strong> одиночный замер и серия 2–10; время каждого замера; самочувствие 1–10; 16 отметок; заметки; история с 8 сортировками и датами; три графика; интервалы 7/30/90 дней и все записи; периоды, их редактирование, удаление и сравнение; Excel и JSON; восстановление и автокопии.</p><p>Это рабочий веб-аналог. Данные сохраняются в браузере отдельно от мобильного приложения. Тактильный отклик и системное меню «Поделиться» заменены браузерными действиями скачивания.</p>`,`<button class="measure-cta" data-action="close-modal">Понятно</button>`);break;
     }
   }
-  document.addEventListener('click',event=>{const target=event.target.closest('[data-action]');if(target)action(target);else if(event.target===$('modal'))closeModal();});
+  document.addEventListener('click',event=>{if(modal?.type==='filters'&&theme==='clarity'&&!event.target.closest('.history-select,.history-filter-dates,.history-calendar-panel'))closeHistoryFilterPopovers();const target=event.target.closest('[data-action]');if(target)action(target);else if(event.target===$('modal'))closeModal();});
   document.addEventListener('pointerdown',()=>{document.body.dataset.inputMode='pointer';});
   document.addEventListener('keydown',()=>{document.body.dataset.inputMode='keyboard';});
   document.addEventListener('keydown',event=>{
-    if(event.key==='Escape'&&modal){closeModal();return;}
+    if(event.key==='Escape'&&modal){if(!closeHistoryFilterPopovers(true))closeModal();return;}
+    if(modal?.type==='filters'&&theme==='clarity'&&['ArrowDown','ArrowUp','Home','End'].includes(event.key)){
+      const trigger=event.target.closest('.history-select-trigger'),list=event.target.closest('.history-select-options');
+      if(trigger&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();openHistoryFilterSelect(trigger.dataset.key);return;}
+      if(list){event.preventDefault();const options=[...list.querySelectorAll('[role="option"]')],index=options.indexOf(event.target),next=event.key==='Home'?0:event.key==='End'?options.length-1:(index+(event.key==='ArrowDown'?1:-1)+options.length)%options.length;options[next].focus();return;}
+    }
     if(theme==='clarity'&&!modal&&event.key==='Enter'&&!event.isComposing&&event.target.matches('.metric-field input')){
       event.preventDefault();advanceMetric(event.target);return;
     }
