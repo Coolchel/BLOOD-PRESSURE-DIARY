@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
+import { DataLoadState } from '@/components/data-load-state';
+import { SaveSuccessOverlay } from '@/components/save-success-overlay';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
@@ -40,7 +42,7 @@ export default function PhaseEditorScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const db = useSQLiteContext();
   const editingId = id ? Number(id) : null;
-  const isEditing = editingId !== null && Number.isInteger(editingId);
+  const isEditing = editingId !== null && Number.isInteger(editingId) && editingId > 0;
 
   const [kind, setKind] = useState<PhaseKind>('clean');
   const [title, setTitle] = useState('Без всего');
@@ -49,16 +51,25 @@ export default function PhaseEditorScreen() {
   const [endedAt, setEndedAt] = useState<Date | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(isEditing);
+  const [loadError, setLoadError] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [picker, setPicker] = useState<PickerTarget | null>(null);
   const [androidMode, setAndroidMode] = useState<'date' | 'time' | null>(null);
 
   useEffect(() => {
     if (!isEditing || editingId === null) return;
+    let active = true;
+    setLoading(true);
+    setLoadError(false);
+    setNotFound(false);
 
     getPhaseById(db, editingId)
       .then((phase) => {
-        if (!phase) return;
+        if (!active) return;
+        if (!phase) { setNotFound(true); return; }
         setKind(phase.kind);
         setTitle(phase.title);
         setTitleTouched(true);
@@ -66,8 +77,10 @@ export default function PhaseEditorScreen() {
         setEndedAt(phase.endedAt ? new Date(phase.endedAt) : null);
         setNote(phase.note);
       })
-      .finally(() => setLoading(false));
-  }, [db, editingId, isEditing]);
+      .catch(() => { if (active) setLoadError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [db, editingId, isEditing, loadAttempt]);
 
   function chooseKind(next: PhaseKind) {
     void Haptics.selectionAsync();
@@ -85,6 +98,7 @@ export default function PhaseEditorScreen() {
   }
 
   async function save() {
+    if (saving) return;
     if (!title.trim()) {
       Alert.alert('Нужно название', 'Назови период, чтобы отличать его в списке.');
       return;
@@ -105,8 +119,12 @@ export default function PhaseEditorScreen() {
     try {
       setSaving(true);
       await savePhase(db, input, isEditing ? editingId : null);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      if (isEditing) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      } else {
+        setSaved(true);
+      }
     } catch (error) {
       Alert.alert('Не получилось сохранить', error instanceof PhaseOverlapError ? error.message : 'Попробуй ещё раз.');
       setSaving(false);
@@ -125,9 +143,16 @@ export default function PhaseEditorScreen() {
           text: 'Удалить',
           style: 'destructive',
           onPress: async () => {
-            await removePhase(db, editingId);
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            router.back();
+            try {
+              setSaving(true);
+              await removePhase(db, editingId);
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.back();
+            } catch {
+              Alert.alert('Не получилось удалить период', 'Попробуй ещё раз. Измерения сохранены.');
+            } finally {
+              setSaving(false);
+            }
           },
         },
       ],
@@ -135,6 +160,18 @@ export default function PhaseEditorScreen() {
   }
 
   const pickerValue = picker === 'end' ? (endedAt ?? new Date()) : startedAt;
+
+  if (loading || loadError || notFound || (id && !isEditing)) {
+    return (
+      <ScreenShell>
+        <Pressable accessibilityLabel="Закрыть" onPress={() => router.back()} style={styles.closeButton}>
+          <IconSymbol name="xmark" size={20} color={Palette.text} />
+        </Pressable>
+        <DataLoadState loading={loading} error={loadError} onRetry={() => setLoadAttempt((value) => value + 1)} label="период" />
+        {notFound || (id && !isEditing) ? <Text style={styles.subtitle}>Период не найден. Вернитесь к списку периодов.</Text> : null}
+      </ScreenShell>
+    );
+  }
 
   return (
     <>
@@ -279,6 +316,13 @@ export default function PhaseEditorScreen() {
           </>
         )}
       </ScreenShell>
+
+      <SaveSuccessOverlay
+        onDone={() => router.back()}
+        subtitle="Период добавлен в дневник"
+        title="Период создан"
+        visible={saved}
+      />
 
       <Modal
         animationType="fade"

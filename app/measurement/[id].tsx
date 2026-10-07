@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
+import { DataLoadState } from '@/components/data-load-state';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
@@ -29,10 +30,12 @@ export default function MeasurementDetailsScreen() {
   const db = useSQLiteContext();
   const [measurement, setMeasurement] = useState<MeasurementDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [editingNote, setEditingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [savingNote, setSavingNote] = useState(false);
-  const phases = usePhaseList();
+  const { phases, error: phaseError, loading: phaseLoading, refresh: refreshPhases } = usePhaseList();
 
   function startEditingNote(current: MeasurementDetails) {
     void Haptics.selectionAsync();
@@ -56,21 +59,30 @@ export default function MeasurementDetailsScreen() {
   }
 
   useEffect(() => {
+    let active = true;
     const numericId = Number(id);
-    if (!Number.isInteger(numericId)) {
+    setMeasurement(null);
+    setLoadError(false);
+    setLoading(true);
+    if (!Number.isInteger(numericId) || numericId <= 0) {
       setLoading(false);
       return;
     }
 
     getMeasurementById(db, numericId)
-      .then(setMeasurement)
-      .finally(() => setLoading(false));
-  }, [db, id]);
+      .then((value) => { if (active) setMeasurement(value); })
+      .catch(() => { if (active) setLoadError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [db, id, loadAttempt]);
 
-  if (loading) {
+  if (loading || loadError) {
     return (
       <ScreenShell>
-        <Text style={styles.loading}>Загружаем измерение…</Text>
+        <Pressable accessibilityLabel="Назад" onPress={() => router.back()} style={styles.backButton}>
+          <IconSymbol name="chevron.left" size={22} color={Palette.text} />
+        </Pressable>
+        <DataLoadState loading={loading} error={loadError} onRetry={() => setLoadAttempt((value) => value + 1)} label="измерение" />
       </ScreenShell>
     );
   }
@@ -93,6 +105,7 @@ export default function MeasurementDetailsScreen() {
 
   return (
     <ScreenShell contentContainerStyle={styles.content}>
+      {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label="метку периода" /> : null}
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Назад"

@@ -18,6 +18,20 @@
     valuesList:'M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01',
     singleReading:'M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 12h2l1-3 2 6 1-3h2',
     chevronDown:'M6 9l6 6 6-6',
+    pill:'M9 3a5 5 0 0 1 7 7l-6 6a5 5 0 0 1-7-7l6-6zM6 6l7 7',
+    moon:'M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11z',
+    sun:'M16 12a4 4 0 1 0-8 0 4 4 0 0 0 8 0M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5',
+    walk:'M14 5a2 2 0 1 0-4 0 2 2 0 0 0 4 0M7 12l3-4 4 2 3 3h3M12 10l-2 6-4 5M10 16l5 1 2 4',
+    dumbbell:'M6 5v14M3 8v8M18 5v14M21 8v8M6 12h12',
+    apple:'M12 7c-3-4-8-2-8 3 0 4 3 10 6 10l2-1 2 1c3 0 6-6 6-10 0-5-5-7-8-3zM12 7V4M12 4c1-3 4-3 5-3-1 3-3 4-5 3',
+    drop:'M12 3C9 7 5 11 5 15a7 7 0 0 0 14 0c0-4-4-8-7-12z',
+    cup:'M5 8h11v7a5 5 0 0 1-10 0V8M16 9h2a3 3 0 0 1 0 6h-2M8 2v3M12 2v3M3 22h16',
+    flower:'M15 12a3 3 0 1 0-6 0 3 3 0 0 0 6 0M12 8c-6-6-9 2-5 4-4 4 2 10 5 4 3 6 9 0 5-4 4-2 1-10-5-4zM12 16v6',
+    mountain:'M2 20 9 5l5 9 3-5 5 11H2zM6 11l3 2 3-2',
+    book:'M12 5C9 3 5 3 3 4v16c3-1 6-1 9 1 3-2 6-2 9-1V4c-2-1-6-1-9 1zM12 5v16',
+    briefcase:'M3 7h18v13H3V7zM8 7V3h8v4M3 12l9 3 9-3M10 12h4v4h-4z',
+    plane:'M22 2 9 8l-6-1-1 2 6 4 4 6 2-1-1-6 9-10zM2 22l4-4',
+    star:'m12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6z',
     backArrow:'M19 12H5M11 6l-6 6 6 6',
   });
   const I=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${iconPaths[name]||iconPaths.info}"/></svg>`;
@@ -26,8 +40,9 @@
   const time=value=>date(value,{hour:'2-digit',minute:'2-digit'});
   const full=value=>date(value,{day:'numeric',month:'long',year:'numeric'})+' · '+time(value);
   const local=value=>{const d=new Date(value);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')+'T'+time(value).replace('.',':');};
-  const kind=p=>M.KINDS.find(k=>k.kind===p.kind)||M.KINDS[0];
-  const range=p=>date(p.startedAt)+' — '+(p.endedAt?date(p.endedAt):'сейчас');
+  const kind=p=>M.phaseAppearance(p);
+  const phaseStatusLabel=p=>({active:'Идёт сейчас',scheduled:'Запланирован',finished:'Завершён'})[M.phaseStatus(p)];
+  const range=p=>M.phaseStatus(p)==='scheduled'&&!p.endedAt?'с '+date(p.startedAt,{day:'numeric',month:'short',year:'numeric'}):date(p.startedAt)+' — '+(p.endedAt?date(p.endedAt):'сейчас');
   const recs=n=>n+' '+(n%100>=11&&n%100<=14?'записей':n%10===1?'запись':n%10>=2&&n%10<=4?'записи':'записей');
   const phaseCount=n=>n+' '+(n%100>=11&&n%100<=14?'периодов':n%10===1?'период':n%10>=2&&n%10<=4?'периода':'периодов');
   const readingCount=n=>n+' '+(n===1?'замер':n<5?'замера':'замеров');
@@ -36,13 +51,13 @@
   const entryMetrics=[['systolic','Верхнее'],['diastolic','Нижнее'],['pulse','Пульс']];
   let storageError='';
   let state;
-  try{const saved=localStorage.getItem(key);state=saved?JSON.parse(saved):M.seed();if(state.schema!==1)throw Error('Версия данных не поддерживается.');M.restore(M.backup(state));}
+  try{const saved=localStorage.getItem(key);state=saved?JSON.parse(saved):M.seed();if(state.schema!==1)throw Error('Версия данных не поддерживается.');M.restore(M.backup(state),[],{enforcePhaseLimit:false});}
   catch(error){
     if(error.message.includes('непустую')&&state&&Array.isArray(state.sessions)&&state.sessions.length===0&&Array.isArray(state.phases)){}
     else {state=M.seed();storageError='Не удалось прочитать сохранённый дневник. Используются тестовые данные; исходное хранилище не перезаписывается.';}
   }
   const defaultHistoryFilters=()=>({sort:'newest',from:'',to:'',interval:'all',mode:'all',phaseId:'all',wellbeingMin:'',wellbeingMax:'',tags:[],withNote:false});
-  const ui={view:'home',id:null,detailReturn:'history',period:'7',scope:'time',metric:'pressure',filters:defaultHistoryFilters(),limit:30,entry:null,error:'',readingValidation:false,chartSelection:{},undo:null};
+  const ui={view:'home',id:null,detailReturn:'history',period:'7',scope:'time',metric:'pressure',filters:defaultHistoryFilters(),limit:30,entry:null,error:'',readingValidation:false,chartSelection:{},phaseGroups:{},phaseGroupMode:null,undo:null};
   let modal=null,toastTimer,saveAnimationTimer,focusBeforeModal;
   document.body.classList.add('theme-'+theme);
   const params=new URLSearchParams(location.search);
@@ -55,7 +70,7 @@
     clearTimeout(toastTimer);$('toast').hidden=true;
     clearTimeout(saveAnimationTimer);
     const overlay=$('save-success');
-    $('save-success-title').textContent=mode==='series'?'Серия сохранена':'Измерение сохранено';
+    $('save-success-title').textContent=mode==='phase'?'Период создан':mode==='series'?'Серия сохранена':'Измерение сохранено';
     overlay.hidden=false;
     ['app-content','app-header','bottom-nav','entry-footer'].forEach(id=>$(id).inert=true);
     overlay.focus({preventScroll:true});
@@ -118,14 +133,14 @@
   function newDraft(){return M.newDraft();}
   function saveDraft(){if(!ui.entry)return false;return persist(M.storeDraft(state,ui.entry),false);}
   function recordCard(s){
-    const v=M.summary(s),p=M.phaseFor(s,state.phases);
+    const v=M.summary(s),matched=M.phasesFor(s,state.phases),p=matched[0];
     if(theme==='clarity'&&ui.view==='history')return `<button class="card record-card clarity-history-record ${s.mode==='series'?'history-series':'history-single'}" data-action="detail" data-id="${s.id}" aria-label="Измерение ${esc(full(s.measuredAt))}, ${v.systolic} на ${v.diastolic}, пульс ${v.pulse}, самочувствие ${s.wellbeing} из 10">
       <span class="history-record-header"><span class="history-date-block"><time class="history-date" datetime="${esc(s.measuredAt)}">${date(s.measuredAt,{day:'numeric',month:'long'})} <span class="history-date-year">${date(s.measuredAt,{year:'numeric'})}</span></time><span class="history-record-mode">${s.mode==='series'?I('layers')+'Серия · '+readingCount(s.readings.length):I('singleReading')+'Одиночный замер'}</span></span><span class="history-time-block"><time class="history-time" datetime="${esc(s.measuredAt)}">${time(s.measuredAt)}</time>${I('chevron','record-chevron')}</span></span>
       <span class="history-metrics"><span class="history-pressure"><span class="history-metric-label">${s.mode==='series'?'Среднее давление':'Давление'}</span><span class="history-bp"><span class="bp-upper">${v.systolic}</span><span class="slash">/</span><span class="bp-lower">${v.diastolic}</span></span></span><span class="history-pulse" data-metric="pulse"><span class="history-metric-label">Пульс</span><span class="history-pulse-value">${I('heartPulse')}<strong>${v.pulse}</strong></span></span></span>
-      <span class="history-context">${p?`<span class="history-period" title="${esc(p.title)} · ${esc(range(p))}">${I(kind(p).icon)}<span class="history-period-text"><strong>${esc(p.title)}</strong><small>${range(p)}</small></span></span>`:''}<span class="history-wellbeing">${I('wellbeingGauge')}<span>Самочувствие <strong>${s.wellbeing}<small>/10</small></strong></span></span></span>
+      <span class="history-context">${matched.length?`<span class="history-periods">${matched.map(p=>`<span class="history-period" style="--phase-color:${kind(p).color}" title="${esc(p.title)} · ${esc(range(p))}">${I(kind(p).icon)}<span class="history-period-text"><strong>${esc(p.title)}</strong><small>${range(p)}</small></span></span>`).join('')}</span>`:''}<span class="history-wellbeing">${I('wellbeingGauge')}<span>Самочувствие <strong>${s.wellbeing}<small>/10</small></strong></span></span></span>
       ${s.note?`<span class="record-note">${esc(s.note)}</span>`:''}
     </button>`;
-    return `<button class="card record-card" data-action="detail" data-id="${s.id}" aria-label="Измерение ${esc(full(s.measuredAt))}, ${v.systolic} на ${v.diastolic}"><div class="record-top"><span>${date(s.measuredAt)} · ${time(s.measuredAt)}</span><span>${s.mode==='series'?'Серия · '+readingCount(s.readings.length):'Один замер'}</span></div><div class="record-values"><span class="record-bp">${v.systolic}<span class="muted"> / </span>${v.diastolic}</span><span class="record-pulse" data-metric="pulse">${I('pulse')}${v.pulse}</span>${I('chevron','record-chevron')}</div><div class="record-foot">${p?`<span class="pill">${esc(p.title)}</span>`:''}<span class="pill">Самочувствие ${s.wellbeing}/10</span></div>${s.note?`<p class="record-note">${esc(s.note.length>80?s.note.slice(0,80)+'…':s.note)}</p>`:''}</button>`;
+    return `<button class="card record-card" data-action="detail" data-id="${s.id}" aria-label="Измерение ${esc(full(s.measuredAt))}, ${v.systolic} на ${v.diastolic}"><div class="record-top"><span>${date(s.measuredAt)} · ${time(s.measuredAt)}</span><span>${s.mode==='series'?'Серия · '+readingCount(s.readings.length):'Один замер'}</span></div><div class="record-values"><span class="record-bp">${v.systolic}<span class="muted"> / </span>${v.diastolic}</span><span class="record-pulse" data-metric="pulse">${I('pulse')}${v.pulse}</span>${I('chevron','record-chevron')}</div><div class="record-foot">${matched.map(p=>`<span class="pill">${esc(p.title)}</span>`).join('')}<span class="pill">Самочувствие ${s.wellbeing}/10</span></div>${s.note?`<p class="record-note">${esc(s.note.length>80?s.note.slice(0,80)+'…':s.note)}</p>`:''}</button>`;
   }
   const empty=(title,desc,action='')=>`<div class="empty">${I('chart')}<strong>${title}</strong>${desc}${action}</div>`;
   function statGrid(s){return `<div class="stats-grid">${[['systolic','Верхнее давление','мм рт. ст.','up'],['diastolic','Нижнее давление','мм рт. ст.','down'],['pulse','Пульс','уд/мин','pulse'],['wellbeing','Самочувствие','из 10','smile']].map(([key,label,unit,icon])=>`<div class="stat-tile" data-metric="${key}"><span class="metric-icon">${I(icon)}</span><strong>${s.count?num(s[key],key==='wellbeing'?1:0):'—'}</strong><small>${label}<br>${unit}</small></div>`).join('')}</div>`;}
@@ -143,11 +158,11 @@
   }
   function clarityPeriodCard(p){
     const content=`<span class="home-period-icon">${I(p?kind(p).icon:'calendar')}</span><span class="grow"><strong>${p?esc(p.title):'Без периода'}</strong><span class="home-period-meta">${p?range(p):'Выбрать период наблюдения'}</span></span>${I('chevron','home-period-chevron')}`;
-    return `<button class="card home-period" data-action="${p?'phase':'nav'}" ${p?`data-id="${p.id}"`:'data-view="phases"'}>${content}</button>`;
+    return `<button class="card home-period" ${p?`style="--phase-color:${kind(p).color}"`:''} data-action="${p?'phase':'nav'}" ${p?`data-id="${p.id}"`:'data-view="phases"'}>${content}</button>`;
   }
-  function clarityDetail(item,p){
+  function clarityDetail(item,matched){
     const source=`<h2 class="form-section">Исходные замеры</h2><div class="card source-readings-card"><table class="reading-table source-readings-table" aria-label="Исходные замеры"><colgroup><col class="source-date-column"><col><col><col></colgroup><thead><tr><th scope="col">Дата и время</th><th scope="col">Верхнее</th><th scope="col">Нижнее</th><th scope="col">Пульс</th></tr></thead><tbody>${item.readings.map(r=>`<tr><td><time datetime="${esc(r.measuredAt)}">${time(r.measuredAt)}<small>${date(r.measuredAt)}</small></time></td><td data-metric="systolic"><strong>${r.systolic}</strong></td><td data-metric="diastolic"><strong>${r.diastolic}</strong></td><td data-metric="pulse"><strong>${r.pulse}</strong></td></tr>`).join('')}</tbody></table></div>`;
-    return `<h2 class="form-section">Показания</h2>`+clarityMeasurementCard(item)+`<h2 class="form-section">Период</h2>`+clarityPeriodCard(p)+source+`<h2 class="form-section">Самочувствие</h2><div class="card"><div class="row between"><span class="muted">Оценка</span><strong>${item.wellbeing} из 10</strong></div>${item.tags.length?`<div class="tag-grid" style="margin-top:15px">${item.tags.map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>`:''}</div><div class="entry-note-block"><label class="form-label" for="saved-note">Заметка</label><textarea id="saved-note" class="form-input" placeholder="Что важно помнить об этом измерении?" data-session-note="${item.id}">${esc(item.note)}</textarea></div>`;
+    return `<h2 class="form-section">Показания</h2>`+clarityMeasurementCard(item)+`<h2 class="form-section">${matched.length>1?'Периоды':'Период'}</h2>`+(matched.length?matched.map(clarityPeriodCard).join(''):clarityPeriodCard(null))+source+`<h2 class="form-section">Самочувствие</h2><div class="card"><div class="row between"><span class="muted">Оценка</span><strong>${item.wellbeing} из 10</strong></div>${item.tags.length?`<div class="tag-grid" style="margin-top:15px">${item.tags.map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>`:''}</div><div class="entry-note-block"><label class="form-label" for="saved-note">Заметка</label><textarea id="saved-note" class="form-input" placeholder="Что важно помнить об этом измерении?" data-session-note="${item.id}">${esc(item.note)}</textarea></div>`;
   }
   function home(){
     const recent=M.filter(state.sessions).slice(0,12),latest=recent[0],s=latest?M.summary(latest):null,p=latest?M.phaseFor(latest,state.phases):null;
@@ -156,7 +171,8 @@
     const resume=M.resumableDraft(state)?`<button class="draft-resume" data-action="resume-draft">${I('edit')}<span${theme==='clarity'?'':' class="grow"'}>Продолжить запись</span>${theme==='clarity'?'':I('chevron')}</button>`:'';
     if(theme==='clarity'){
       const measurement=latest?clarityMeasurementCard(latest,true):latestCard;
-      const period=clarityPeriodCard(p);
+      const matched=latest?M.phasesFor(latest,state.phases):[];
+      const period=matched.length?matched.map(clarityPeriodCard).join(''):clarityPeriodCard(null);
       return measurement+(resume||add)+period+`<div class="section-title">Динамика<button data-action="nav" data-view="statistics">Вся статистика ↗</button></div>`+chartMarkup('home','Последние 12 измерений',recent);
     }
     const a=M.stats(recent);
@@ -205,15 +221,51 @@
     const items=M.filter(state.sessions,selectedPhase?{phase:selectedPhase}:{days:ui.period});
     const s=M.stats(items),r=M.ranges(items),window=selectedPhase?{from:Date.parse(selectedPhase.startedAt),until:selectedPhase.endedAt?Date.parse(selectedPhase.endedAt):Date.now()}:ui.period==='all'?null:{from:Date.now()-+ui.period*M.DAY,until:Date.now()};
     const title=selectedPhase?selectedPhase.title:ui.period==='all'?'Все записи':'Последние '+ui.period+' дней';
-    return `<label class="sr-only" for="stats-scope">Интервал или период наблюдения</label><select class="scope-select" id="stats-scope" data-change="scope"><option value="time" ${ui.scope==='time'?'selected':''}>По времени</option>${state.phases.map(p=>`<option value="${p.id}" ${ui.scope===String(p.id)?'selected':''}>${esc(p.title)} · ${range(p)}</option>`).join('')}</select>${ui.scope==='time'?`<div class="segmented" aria-label="Интервал статистики">${[['7','7 дней'],['30','30 дней'],['90','90 дней'],['all','Всё']].map(([v,l])=>`<button data-action="period" data-value="${v}" class="${v===ui.period?'active':''}" aria-pressed="${v===ui.period}">${l}</button>`).join('')}</div>`:''}<div class="scope-caption">${esc(title)} · ${recs(items.length)}<br>${items.length?date(window?window.from:items.at(-1).measuredAt)+' — '+date(window?window.until:items[0].measuredAt):'Записей пока нет'}</div><div class="segmented" aria-label="Показатель графика">${[['pressure','Давление'],['pulse','Пульс'],['wellbeing','Самочувствие']].map(([v,l])=>`<button data-action="metric" data-value="${v}" class="${v===ui.metric?'active':''}" aria-pressed="${v===ui.metric}">${l}</button>`).join('')}</div>`+chartMarkup('stats',ui.metric==='pressure'?'Давление · мм рт. ст.':ui.metric==='pulse'?'Пульс · уд/мин':'Самочувствие · баллы',items,ui.metric,selectedPhase?[selectedPhase]:state.phases,window)+`<div class="section-title">Средние значения</div><div class="scope-caption">${esc(title)} · ${recs(items.length)}. Серия учитывается как одна запись.</div>`+statGrid(s)+`<div class="section-title">Диапазон замеров</div><div class="scope-caption">Самые низкие и высокие значения. В серии учитывается каждый замер.</div><div class="card">${[['systolic','Верхнее','мм рт. ст.'],['diastolic','Нижнее','мм рт. ст.'],['pulse','Пульс','уд/мин']].map(([key,label,unit])=>`<div class="range-row" data-metric="${key}"><span>${label}<br><small class="muted">${unit}</small></span><strong>${r[key]?r[key].join(' — '):'—'}</strong></div>`).join('')}</div>`;
+    return `<label class="sr-only" for="stats-scope">Интервал или период наблюдения</label><select class="scope-select" id="stats-scope" data-change="scope"><option value="time" ${ui.scope==='time'?'selected':''}>По времени</option>${state.phases.map(p=>`<option value="${p.id}" ${ui.scope===String(p.id)?'selected':''}>${esc(p.title)} · ${range(p)}</option>`).join('')}</select>${ui.scope==='time'?`<div class="segmented" aria-label="Интервал статистики">${[['7','7 дней'],['30','30 дней'],['90','90 дней'],['all','Всё']].map(([v,l])=>`<button data-action="period" data-value="${v}" class="${v===ui.period?'active':''}" aria-pressed="${v===ui.period}">${l}</button>`).join('')}</div>`:''}<div class="scope-caption">${esc(title)} · ${recs(items.length)}<br>${items.length?date(window?window.from:items.at(-1).measuredAt)+' — '+date(window?window.until:items[0].measuredAt):'Записей пока нет'}</div><div class="segmented" aria-label="Показатель графика">${[['pressure','Давление'],['pulse','Пульс'],['wellbeing','Самочувствие']].map(([v,l])=>`<button data-action="metric" data-value="${v}" class="${v===ui.metric?'active':''}" aria-pressed="${v===ui.metric}">${l}</button>`).join('')}</div>`+chartMarkup('stats',ui.metric==='pressure'?'Давление · мм рт. ст.':ui.metric==='pulse'?'Пульс · уд/мин':'Самочувствие · баллы',items,ui.metric,selectedPhase?[selectedPhase]:state.phases,window)+`<div class="section-title">Средние значения</div><div class="scope-caption">${esc(title)} · ${recs(items.length)}. Серия учитывается как одна запись.</div>`+statGrid(s)+`<div class="section-title">Диапазон замеров</div><div class="scope-caption">Самые низкие и высокие значения. В серии учитывается каждый замер.</div><div class="card">${[['systolic','Верхнее','мм рт. ст.'],['diastolic','Нижнее','мм рт. ст.'],['pulse','Пульс','уд/мин']].map(([key,label,unit])=>`<div class="range-row" data-metric="${key}"><span>${label}<br><small class="muted">${unit}</small></span><strong>${r[key]?r[key].join(' — '):'—'}</strong></div>`).join('')}</div>`+comparisons();
   }
-  function phaseCard(p){const info=kind(p),s=M.stats(state.sessions.filter(m=>M.inside(m,p)));return `<button class="card phase-card" style="--phase-color:${info.color}" data-action="phase" data-id="${p.id}"><div class="row between"><span class="pill phase-kind">${I(info.icon)}${info.label}</span>${p.endedAt===null?'<span class="small muted">Идёт сейчас</span>':I('chevron')}</div><h3>${esc(p.title)}</h3><div class="phase-meta">${range(p)}<br>${recs(s.count)}</div>${s.count?compactStats(s):'<p class="form-hint">Измерений в периоде пока нет</p>'}</button>`;}
-  function comparisons(){const base=M.baseline(state.sessions,state.phases),compared=state.phases.filter(p=>p.kind!=='clean').map(p=>({...p,stats:M.stats(state.sessions.filter(s=>M.inside(s,p)))})).filter(p=>p.stats.count);return `<div class="section-title">Сравнение периодов</div>${base.count?`<div class="card"><div class="small muted">Без напитков · ${recs(base.count)}</div>${compactStats(base)}</div>`:empty('Пока не с чем сравнить','Добавьте записи в период «Без напитков».')}`+(base.count?compared.length?compared.map(p=>`<div class="card"><div class="compare-head">${esc(p.title)}</div><div class="small muted">${recs(p.stats.count)} · разница с периодами без напитков</div>${[['systolic','Верхнее','мм'],['diastolic','Нижнее','мм'],['pulse','Пульс','уд/мин'],['wellbeing','Самочувствие','балл']].map(([k,l,u])=>{const delta=Math.round((p.stats.averages[k]-base.averages[k])*10)/10;return `<div class="compare-row" data-metric="${k}"><span>${l}</span><span>${num(base.averages[k],1)} → ${num(p.stats.averages[k],1)}</span><strong class="delta">${delta>0?'+':''}${num(delta,1)} ${u}</strong></div>`;}).join('')}</div>`).join(''):'<div class="settings-info">Сравнение появится, когда будут записи в другом типе периода.</div>':'');}
-  function phases(){return `<p class="scope-caption">Отмечайте периоды привычек и сравнивайте показатели. Записи распределяются по дате автоматически.</p><button class="measure-cta" data-action="phase-editor">${I('plus')}Новый период</button><div class="section-title">Периоды наблюдения<span class="small muted">${state.phases.length}</span></div>`+(state.phases.length?state.phases.slice().sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).map(phaseCard).join(''):empty('Периодов пока нет','Создайте первый период наблюдения.'))+comparisons();}
-  function phaseDetail(){const p=state.phases.find(p=>p.id===ui.id);if(!p)return empty('Период не найден','Вернитесь к списку периодов.');const items=M.filter(state.sessions,{phase:p}),s=M.stats(items);return `<span class="pill">${I(kind(p).icon)}${kind(p).label}</span><p class="scope-caption">${range(p)} · ${recs(items.length)}</p><button class="secondary" style="width:100%" data-action="phase-editor" data-id="${p.id}">${I('edit')}Изменить период</button><div class="section-title">Средние за период</div>`+statGrid(s)+chartMarkup('phase','Давление за период',items,'pressure',[p])+`<div class="section-title">Заметка</div><div class="card phase-detail-note">${p.note?esc(p.note):'<span class="muted">Заметка не добавлена</span>'}</div><div class="section-title">Измерения<span class="small muted">${items.length}</span></div>`+(items.length?items.map(recordCard).join(''):empty('Пока нет измерений','Записи появятся здесь, если их дата попадёт в период.'));}
+
+  function phaseCard(p){
+    const info=kind(p),s=M.stats(M.filter(state.sessions,{phase:p}));
+    if(theme==='clarity')return `<button class="card phase-card clarity-phase-card" style="--phase-color:${info.color}" data-action="phase" data-id="${p.id}" data-status="${M.phaseStatus(p)}">
+      <div class="phase-card-header"><span class="phase-card-logo">${I(info.icon)}</span><div class="phase-card-name"><h3>${esc(p.title)}</h3><span class="phase-card-status"><span aria-hidden="true"></span>${phaseStatusLabel(p)}</span></div>${I('chevron','phase-card-chevron')}</div>
+      <div class="phase-card-dates"><span class="phase-card-date-range">${I('calendar')}<span>${range(p)}</span></span>${s.count?`<span class="phase-card-records">${I('valuesList')}${recs(s.count)}</span>`:''}</div>
+      ${s.count?`<div class="phase-card-summary"><div class="phase-card-metrics"><div class="phase-card-pressure"><span class="phase-card-metric-label">Давление</span><span class="phase-card-bp"><span class="bp-upper">${s.systolic}</span><span class="slash">/</span><span class="bp-lower">${s.diastolic}</span></span></div><div data-metric="pulse"><span class="phase-card-metric-label">Пульс</span><span class="phase-card-pulse"><strong>${s.pulse}</strong></span></div><div><span class="phase-card-metric-label">Самочувствие</span><strong class="phase-card-wellbeing">${num(s.wellbeing,1)}</strong></div></div><p class="phase-card-summary-caption">Средние за период</p></div>`:'<p class="phase-card-no-readings">Измерений в периоде пока нет</p>'}
+    </button>`;
+    return `<button class="card phase-card" style="--phase-color:${info.color}" data-action="phase" data-id="${p.id}"><div class="row between"><span class="pill phase-kind">${I(info.icon)}${phaseStatusLabel(p)}</span>${I('chevron')}</div><h3>${esc(p.title)}</h3><div class="phase-meta">${range(p)}<br>${recs(s.count)}</div>${s.count?compactStats(s):'<p class="form-hint">Измерений в периоде пока нет</p>'}</button>`;
+  }
+  function comparisons(){
+    if(!state.phases.length)return '';
+    const baseline=state.phases.find(p=>String(p.id)===ui.compareBase)||state.phases.find(p=>p.kind==='clean')||state.phases[0];
+    ui.compareBase=String(baseline.id);
+    const base=M.stats(M.filter(state.sessions,{phase:baseline}));
+    const compared=state.phases.filter(p=>p.id!==baseline.id).map(p=>({...p,stats:M.stats(M.filter(state.sessions,{phase:p}))})).filter(p=>p.stats.count);
+    return '<div class="section-title">Сравнение периодов</div>'+`<label class="form-label" for="compare-baseline">Сравнивать с периодом</label><select id="compare-baseline" class="scope-select" data-change="compare-baseline">${state.phases.map(p=>`<option value="${p.id}" ${p.id===baseline.id?'selected':''}>${esc(p.title)} · ${range(p)}</option>`).join('')}</select><p class="form-hint">Разница средних значений. Периоды могут пересекаться.</p>`+(base.count?`<div class="card"><div class="small muted">${esc(baseline.title)} · ${recs(base.count)}</div>${compactStats(base)}</div>`+ (compared.length?compared.map(p=>`<div class="card"><div class="compare-head">${esc(p.title)}</div><div class="small muted">${recs(p.stats.count)} · разница с «${esc(baseline.title)}»</div>${[['systolic','Верхнее','мм'],['diastolic','Нижнее','мм'],['pulse','Пульс','уд/мин'],['wellbeing','Самочувствие','балл']].map(([k,l,u])=>{const delta=Math.round((p.stats.averages[k]-base.averages[k])*10)/10;return `<div class="compare-row" data-metric="${k}"><span>${l}</span><span>${num(base.averages[k],1)} → ${num(p.stats.averages[k],1)}</span><strong class="delta">${delta>0?'+':''}${num(delta,1)} ${u}</strong></div>`;}).join('')}</div>`).join(''):'<div class="settings-info">Сравнение появится, когда будут измерения в другом периоде.</div>'):empty('Пока не с чем сравнить','В выбранном периоде пока нет измерений.'));
+  }
+  function phaseGroup(key,title,items,defaultOpen){
+    const open=ui.phaseGroups[key]??defaultOpen;
+    const symbol=theme==='clarity'?'<span class="phase-group-symbol" aria-hidden="true">'+I(key==='active'?'layers':'history')+'</span>':'';
+    const count=theme==='clarity'&&key==='active'?'':'<span class="phase-group-count">'+items.length+'</span>';
+    return '<details class="phase-group" data-phase-group="'+key+'" '+(open?'open':'')+'><summary data-action="phase-group-toggle" data-group="'+key+'">'+symbol+'<h2>'+title+'</h2>'+count+I('chevron')+'</summary><div class="phase-group-content">'+(items.length?items.map(phaseCard).join(''):'<p class="phase-group-empty">'+(key==='active'?'Активных периодов пока нет.':'Завершённых периодов пока нет.')+'</p>')+'</div></details>';
+  }
+  function phaseNewButton(){return '<button class="measure-cta phase-new-button" data-action="phase-editor">'+I('plus')+'Новый период</button>';}
+  function phaseCreateCard(){return '<section class="phase-create-card" aria-labelledby="phase-create-title"><div class="phase-create-copy"><h2 id="phase-create-title">Новый период</h2><p>При обновлении привычек<br>или образа жизни</p></div><button class="measure-cta phase-create-button" data-action="phase-editor" aria-label="Создать новый период">'+I('plus')+'Создать</button></section>';}
+  function phases(){
+    const ordered=state.phases.slice().sort((a,b)=>b.startedAt.localeCompare(a.startedAt));
+    const active=ordered.filter(p=>M.phaseStatus(p)!=='finished'),finished=ordered.filter(p=>M.phaseStatus(p)==='finished');
+    const mode=active.length?'active':finished.length?'finished':'empty';
+    if(ui.phaseGroupMode!==mode){ui.phaseGroups={};ui.phaseGroupMode=mode;}
+    if(!ordered.length)return '<section class="phase-empty-state" aria-labelledby="phase-empty-title"><span class="phase-empty-logo" aria-hidden="true">'+I('layers')+'</span><h2 id="phase-empty-title">Периодов пока нет</h2><p>Создайте период для новой привычки или изменения режима.</p><button class="measure-cta" data-action="phase-editor">'+I('plus')+'Создать первый период</button></section>';
+    return (theme==='clarity'?phaseCreateCard():'')+'<div class="phase-groups">'+phaseGroup('active','Активные',active,active.length>0)+(theme==='clarity'?'':phaseNewButton())+phaseGroup('finished','Завершённые',finished,!active.length)+'</div>';
+  }
+  function phaseDetail(){
+    const p=state.phases.find(p=>p.id===ui.id);if(!p)return empty('Период не найден','Вернитесь к списку периодов.');
+    const items=M.filter(state.sessions,{phase:p}),s=M.stats(items),info=kind(p);
+    return `<span class="pill phase-status" style="--phase-color:${info.color}">${I(info.icon)}${phaseStatusLabel(p)}</span><h2 class="detail-heading phase-detail-title">${esc(p.title)}</h2><p class="scope-caption">${full(p.startedAt)} — ${p.endedAt?full(p.endedAt):M.phaseStatus(p)==='scheduled'?'без даты завершения':'сейчас'}<br>${recs(items.length)}</p><div class="phase-detail-actions"><button class="secondary" data-action="phase-editor" data-id="${p.id}">${I('edit')}Изменить период</button>${M.phaseStatus(p)==='active'?`<button class="secondary" data-action="finish-phase" data-id="${p.id}">${I('check')}Завершить период</button>`:''}</div><div class="section-title">Средние за период</div>`+statGrid(s)+chartMarkup('phase','Давление за период',items,'pressure',[p])+`<div class="section-title">Заметка</div><div class="card phase-detail-note">${p.note?esc(p.note):'<span class="muted">Заметка не добавлена</span>'}</div><div class="section-title">Измерения<span class="small muted">${items.length}</span></div>`+(items.length?items.map(recordCard).join(''):empty('Пока нет измерений','Записи появятся здесь, если их дата попадёт в период.'));
+  }
+
   function detail(){
     const item=state.sessions.find(s=>s.id===ui.id);if(!item)return empty('Запись не найдена','Вернитесь в историю.');const s=M.summary(item),p=M.phaseFor(item,state.phases);
-    if(theme==='clarity')return clarityDetail(item,p);
+    if(theme==='clarity')return clarityDetail(item,M.phasesFor(item,state.phases));
     return `<div class="scope-caption">${full(item.measuredAt)}<br>${item.mode==='series'?'Среднее серии из '+item.readings.length+' замеров':'Одиночное измерение'}</div><div class="card"><div class="bp">${bp(s)}</div><div class="unit">мм рт. ст.</div><div class="latest-bottom"><span class="row" data-metric="pulse">${I('pulse')}<strong>${s.pulse}</strong> <span class="small muted">уд/мин</span></span><span class="row">${I('smile')}<strong>${item.wellbeing}/10</strong></span></div></div>${p?`<button class="draft-resume" data-action="phase" data-id="${p.id}">${I(kind(p).icon)}<span class="grow">${esc(p.title)}</span>${I('chevron')}</button>`:''}<div class="section-title">Исходные замеры<span class="small muted">${item.readings.length}</span></div><div class="card"><table class="reading-table"><thead><tr><th>Дата / время</th><th>Верхнее</th><th>Нижнее</th><th>Пульс</th></tr></thead><tbody>${item.readings.map(r=>`<tr><td>${time(r.measuredAt)}<small>${date(r.measuredAt)}</small></td><td>${r.systolic}</td><td>${r.diastolic}</td><td data-metric="pulse">${r.pulse}</td></tr>`).join('')}</tbody></table><div class="form-hint">Давление — мм рт. ст.; пульс — уд/мин.</div></div><div class="section-title">Самочувствие</div><div class="card"><div class="row between"><span class="muted">Оценка</span><strong>${item.wellbeing} из 10</strong></div>${item.tags.length?`<div class="tag-grid" style="margin-top:15px">${item.tags.map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>`:''}</div><div class="section-title">Заметка<button data-action="edit-note" data-id="${item.id}">Изменить</button></div><div class="card note-display">${item.note?esc(item.note):'<span class="muted">Добавьте, как вы себя чувствовали или что происходило перед замером.</span>'}</div>`;
   }
   function readingDateValues(r){
@@ -270,7 +322,7 @@
     const titles={home:concept.home,history:'История',statistics:'Статистика',phases:'Периоды',settings:'Настройки',entry:'Новое измерение',detail:'Измерение',phase:'Период'};
     let actions='';
     if(ui.view==='history')actions=`<button class="icon-button history-filter-trigger ${theme==='clarity'&&activeHistoryFilterCount()?'has-filters':''}" data-action="filters" aria-label="Фильтры истории" ${theme==='clarity'&&activeHistoryFilterCount()?'aria-describedby="history-filter-count"':''}>${I('filter')}${theme==='clarity'&&activeHistoryFilterCount()?`<span class="history-filter-badge" aria-hidden="true">${activeHistoryFilterCount()}</span><span class="sr-only" id="history-filter-count">Выбрано фильтров: ${activeHistoryFilterCount()}</span>`:''}</button><button class="icon-button solid" data-action="new" aria-label="Добавить измерение">${I('plus')}</button>`;
-    else if(top&&ui.view!=='home'&&ui.view!=='settings')actions=`<button class="icon-button" data-action="${ui.view==='phases'?'phase-editor':'new'}" aria-label="${ui.view==='phases'?'Создать период':'Добавить измерение'}">${I('plus')}</button>`;
+    else if(top&&ui.view!=='home'&&ui.view!=='settings'&&ui.view!=='phases')actions=`<button class="icon-button" data-action="new" aria-label="Добавить измерение">${I('plus')}</button>`;
     else if(ui.view==='home'&&theme!=='clarity')actions=`<button class="icon-button" data-action="nav" data-view="settings" aria-label="Настройки">${I('settings')}</button>`;
     $('app-header').innerHTML=top?`<h1>${titles[ui.view]}</h1><div class="header-actions">${actions}</div>`:`<div class="header-back"><button class="icon-button back-button" data-action="back" aria-label="Назад">${I(theme==='clarity'?'backArrow':'back')}</button><h1>${titles[ui.view]}</h1></div>`;
     $('app-content').dataset.view=ui.view;
@@ -323,11 +375,24 @@
   function selectPoint(id,index){const d=chartData[id],p=d?.points[index],mount=$('readout-'+id);if(!p||!mount)return;ui.chartSelection[id]=index;mount.hidden=false;mount.innerHTML=`<div>${p.count>1?date(p.from)+' — '+date(p.to)+' · '+recs(p.count):full(p.measuredAt)}</div><strong>${d.metric==='pressure'?num(p.systolic,1)+' / '+num(p.diastolic,1)+(theme==='clarity'&&id==='home'?'':' мм рт. ст.'):d.metric==='pulse'?num(p.pulse,1)+' уд/мин':num(p.wellbeing,1)+' из 10'}</strong><div><button data-action="point-records" data-chart="${id}" data-point="${index}">${p.count>1?'Открыть исходные записи':'Открыть измерение'} ${I('chevron')}</button></div>`;}
   let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(drawCharts,50);}).observe(phone);
   function showModal(title,body,actions=''){
-    focusBeforeModal=document.activeElement;$('modal').hidden=false;$('modal').innerHTML=`<section class="sheet ${modal?.type==='datetime'?'datetime-sheet':modal?.type==='filters'&&theme==='clarity'?'history-filters-sheet':''}" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"><div class="sheet-handle"></div><div class="sheet-header"><h2 id="sheet-title">${title}</h2><button class="icon-button" data-action="close-modal" aria-label="Закрыть окно">${I('close')}</button></div><div class="sheet-content">${body}</div>${actions?`<div class="sheet-actions">${actions}</div>`:''}</section>`;
+    focusBeforeModal=document.activeElement;$('modal').hidden=false;$('modal').innerHTML=`<section class="sheet ${modal?.type==='datetime'?'datetime-sheet':modal?.type==='phase'?'phase-editor-sheet':modal?.type==='filters'&&theme==='clarity'?'history-filters-sheet':''}" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"><div class="sheet-handle"></div><div class="sheet-header"><h2 id="sheet-title">${title}</h2><button class="icon-button" data-action="close-modal" aria-label="Закрыть окно">${I('close')}</button></div><div class="sheet-content">${body}</div>${actions?`<div class="sheet-actions">${actions}</div>`:''}</section>`;
     $('app-content').inert=true;$('app-header').inert=true;$('bottom-nav').inert=true;$('entry-footer').inert=true;
     $('modal').querySelector('.sheet').focus({preventScroll:true});
   }
-  function closeModal(){if(modal?.type==='download'){const url=modal.url;setTimeout(()=>URL.revokeObjectURL(url),10000);}if(modal?.wheelTimers)Object.values(modal.wheelTimers).forEach(clearTimeout);modal=null;$('modal').hidden=true;$('modal').innerHTML='';['app-content','app-header','bottom-nav','entry-footer'].forEach(id=>$(id).inert=false);if(focusBeforeModal?.isConnected)focusBeforeModal.focus({preventScroll:true});}
+  function closeModal(){
+    if(modal?.type==='download'){const url=modal.url;setTimeout(()=>URL.revokeObjectURL(url),10000);}
+    if(modal?.wheelTimers)Object.values(modal.wheelTimers).forEach(clearTimeout);
+    if(modal?.type==='datetime'&&modal.parent){
+      const {parent,field,returnFocus}=modal;
+      modal=parent;renderPhaseEditor();focusBeforeModal=returnFocus;
+      $('modal').querySelector('.sheet-content').scrollTop=parent.scrollTop;
+      $('modal').querySelector(`[data-action="phase-datetime"][data-field="${field}"]`)?.focus({preventScroll:true});
+      return;
+    }
+    modal=null;$('modal').hidden=true;$('modal').innerHTML='';
+    ['app-content','app-header','bottom-nav','entry-footer'].forEach(id=>$(id).inert=false);
+    if(focusBeforeModal?.isConnected)focusBeforeModal.focus({preventScroll:true});
+  }
   function confirm(title,body,action,label='Подтвердить'){modal={type:'confirm',action};showModal(title,`<p>${body}</p>`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="confirm">${label}</button>`);}
   const twoDigits=value=>String(value).padStart(2,'0');
   function calendarMarkup(calendar=modal){
@@ -357,8 +422,11 @@
     const reading=ui.entry.readings[index];
     const savedDate=new Date(M.readingTimeSource(reading)==='pending'?Date.now():reading.measuredAt);
     const value=Number.isFinite(savedDate.getTime())?savedDate:new Date();
-    modal={type:'datetime',index,day:local(value).slice(0,10),month:new Date(value.getFullYear(),value.getMonth(),1),hour:value.getHours(),minute:value.getMinutes(),wheelTimers:{}};
-    showModal('Дата и время',`<div id="calendar-picker">${calendarMarkup()}</div><div class="calendar-footer"><button class="text-button" data-action="calendar-today">Сегодня</button><span class="muted">${date(value,{day:'numeric',month:'long'})}</span></div><div class="time-picker"><span class="time-picker-label">Время замера</span><div class="time-wheels">${timeWheel('hour',24,'Часы')}<span class="time-colon" aria-hidden="true">:</span>${timeWheel('minute',60,'Минуты')}</div></div>`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="accept-datetime">Готово</button>`);
+    openDateTime(value,{index});
+  }
+  function openDateTime(value,context={},title='Дата и время',timeLabel='Время замера'){
+    modal={type:'datetime',...context,day:local(value).slice(0,10),month:new Date(value.getFullYear(),value.getMonth(),1),hour:value.getHours(),minute:value.getMinutes(),wheelTimers:{}};
+    showModal(title,`<div id="calendar-picker">${calendarMarkup()}</div><div class="calendar-footer"><button class="text-button" data-action="calendar-today">Сегодня</button><span class="muted">${date(value,{day:'numeric',month:'long'})}</span></div><div class="time-picker"><span class="time-picker-label">${timeLabel}</span><div class="time-wheels">${timeWheel('hour',24,'Часы')}<span class="time-colon" aria-hidden="true">:</span>${timeWheel('minute',60,'Минуты')}</div></div>`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="accept-datetime">Готово</button>`);
     $('modal').querySelectorAll('.time-wheel').forEach(wheel=>{
       const field=wheel.dataset.wheel;
       wheel.scrollTop=modal[field]*40;
@@ -400,11 +468,11 @@
   }
   function historyFilterSelectOptions(key){
     if(key==='sort')return [['date','По дате','calendar'],['systolic','По верхнему давлению','up'],['diastolic','По нижнему давлению','down'],['pulse','По пульсу','heartPulse']].map(([value,label,icon])=>({value,label,icon}));
-    return [{value:'all',label:'Все периоды',icon:'layers'},{value:'none',label:'Без периода',icon:'calendar'},...state.phases.slice().sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).map(p=>({value:String(p.id),label:p.title,description:range(p),icon:kind(p).icon}))];
+    return [{value:'all',label:'Все периоды',icon:'layers'},{value:'none',label:'Без периода',icon:'calendar'},...state.phases.slice().sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).map(p=>({value:String(p.id),label:p.title,description:range(p),icon:kind(p).icon,color:kind(p).color}))];
   }
   function historyFilterSelect(key,value){
     const options=historyFilterSelectOptions(key),selected=options.find(option=>option.value===value)||options[0];
-    return `<div class="history-select"><input id="${key==='sort'?'filter-sort-key':'filter-phase'}" type="hidden" value="${esc(value)}"><button class="history-select-trigger" id="filter-${key}-trigger" data-action="history-filter-select" data-key="${key}" aria-haspopup="listbox" aria-controls="filter-${key}-options" aria-expanded="false" aria-labelledby="filter-${key}-label filter-${key}-value"><span id="filter-${key}-icon" class="history-select-icon">${I(selected.icon)}</span><span class="history-select-value" id="filter-${key}-value">${esc(selected.label)}</span>${I('chevronDown','history-select-chevron')}</button><div class="history-select-options" id="filter-${key}-options" role="listbox" aria-labelledby="filter-${key}-label" hidden>${options.map(option=>`<button class="history-select-option" role="option" aria-selected="${option.value===value}" data-action="history-filter-select-option" data-key="${key}" data-value="${esc(option.value)}">${I(option.icon)}<span><strong>${esc(option.label)}</strong>${option.description?`<small>${esc(option.description)}</small>`:''}</span>${I('check','history-select-check')}</button>`).join('')}</div></div>`;
+    return `<div class="history-select"><input id="${key==='sort'?'filter-sort-key':'filter-phase'}" type="hidden" value="${esc(value)}"><button class="history-select-trigger" id="filter-${key}-trigger" data-action="history-filter-select" data-key="${key}" aria-haspopup="listbox" aria-controls="filter-${key}-options" aria-expanded="false" aria-labelledby="filter-${key}-label filter-${key}-value"><span id="filter-${key}-icon" class="history-select-icon" style="--phase-color:${selected.color||'var(--accent)'}">${I(selected.icon)}</span><span class="history-select-value" id="filter-${key}-value">${esc(selected.label)}</span>${I('chevronDown','history-select-chevron')}</button><div class="history-select-options" id="filter-${key}-options" role="listbox" aria-labelledby="filter-${key}-label" hidden>${options.map(option=>`<button class="history-select-option" style="--phase-color:${option.color||'var(--muted)'}" role="option" aria-selected="${option.value===value}" data-action="history-filter-select-option" data-key="${key}" data-value="${esc(option.value)}">${I(option.icon)}<span><strong>${esc(option.label)}</strong>${option.description?`<small>${esc(option.description)}</small>`:''}</span>${I('check','history-select-check')}</button>`).join('')}</div></div>`;
   }
   function closeHistoryFilterPopovers(restoreFocus=false){
     if(modal?.type!=='filters'||theme!=='clarity')return false;
@@ -459,7 +527,7 @@
     const extra=Number(!!(f.wellbeingMin||f.wellbeingMax))+Number(!!f.tags.length)+Number(f.withNote);
     $('filter-extra-count').textContent=extra?String(extra):'';$('filter-extra-count').hidden=!extra;
     ['from','to'].forEach(field=>{const button=$('filter-'+field+'-trigger');button.querySelector('span').textContent=f[field]?date(f[field]+'T12:00',{day:'2-digit',month:'2-digit',year:'numeric'}):'Выбрать';button.classList.toggle('is-empty',!f[field]);});
-    ['phase','sort'].forEach(key=>{const value=key==='phase'?f.phaseId:filterSortKey(f.sort),options=historyFilterSelectOptions(key),selected=options.find(option=>option.value===value)||options[0];$('filter-'+key+'-value').textContent=selected.label;$('filter-'+key+'-icon').innerHTML=I(selected.icon);$('filter-'+key+'-options').querySelectorAll('[role="option"]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.value===value)));});
+    ['phase','sort'].forEach(key=>{const value=key==='phase'?f.phaseId:filterSortKey(f.sort),options=historyFilterSelectOptions(key),selected=options.find(option=>option.value===value)||options[0];$('filter-'+key+'-value').textContent=selected.label;$('filter-'+key+'-icon').innerHTML=I(selected.icon);$('filter-'+key+'-icon').style.setProperty('--phase-color',selected.color||'var(--accent)');$('filter-'+key+'-options').querySelectorAll('[role="option"]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.value===value)));});
     $('modal').querySelectorAll('[data-action="history-filter-interval"],[data-action="history-filter-mode"],[data-action="history-filter-tag"],[data-action="history-filter-sort-direction"]').forEach(button=>{
       const {action,value}=button.dataset,selected=action==='history-filter-interval'?f.interval===value:action==='history-filter-mode'?f.mode===value:action==='history-filter-tag'?f.tags.includes(value):filterSortDirection(f.sort)===value;
       button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
@@ -473,10 +541,72 @@
     $('filter-phase').value='all';$('filter-sort-key').value='date';$('filter-with-note').checked=false;
     updateHistoryFilterPreview();
   }
+
   function phaseEditor(id=null){
-    const p=id===null?{kind:'clean',title:'',startedAt:local(Date.now()),endedAt:null,note:''}:state.phases.find(p=>p.id===id);if(!p)return;
-    modal={type:'phase',id};showModal(id===null?'Новый период':'Изменить период',`<label class="form-label" for="phase-title">Название</label><input id="phase-title" class="form-input" maxlength="100" value="${esc(p.title)}" placeholder="Например, спокойная неделя"><label class="form-label" for="phase-kind">Тип периода</label><select id="phase-kind" class="form-input">${M.KINDS.map(k=>`<option value="${k.kind}" ${k.kind===p.kind?'selected':''}>${k.label}</option>`).join('')}</select><label class="form-label" for="phase-start">Дата начала</label><input id="phase-start" type="datetime-local" class="form-input" value="${id===null?p.startedAt:local(p.startedAt)}"><label class="form-label row"><input id="phase-open" type="checkbox" ${p.endedAt===null?'checked':''} data-change="phase-open">Период продолжается</label><div id="phase-end-wrap" ${p.endedAt===null?'hidden':''}><label class="form-label" for="phase-end">Дата завершения</label><input id="phase-end" type="datetime-local" class="form-input" value="${local(p.endedAt||Date.now())}"><p class="form-hint">В период войдут замеры, сделанные до этого времени.</p></div><label class="form-label" for="phase-note">Заметка</label><textarea id="phase-note" class="form-input">${esc(p.note)}</textarea><p class="form-hint">Предыдущий период завершится, когда начнётся новый. Один замер может относиться только к одному периоду.</p><div class="error-box" id="modal-error" role="alert"></div>${id!==null?'<button class="danger-button" data-action="delete-phase" data-id="'+id+'">Удалить период</button>':''}`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="save-phase">Сохранить</button>`);
+    const p=id===null?{kind:'custom',title:'',icon:'leaf',color:M.PHASE_COLORS[0],startedAt:new Date().toISOString(),endedAt:null,note:''}:state.phases.find(p=>p.id===id);if(!p)return;
+    const appearance=kind(p);modal={type:'phase',id,phase:M.clone(p),icon:appearance.icon,color:appearance.color,endValue:local(p.endedAt||Date.now())};
+    renderPhaseEditor();
   }
+  function phaseDateCard(field,value,disabled=false){
+    const title=field==='start'?'Дата и время начала':'Дата и время завершения';
+    return `<div class="form-label" id="phase-${field}-label">${title}</div><input id="phase-${field}" type="hidden" value="${esc(value)}"><button class="datetime-card phase-datetime-card" data-action="phase-datetime" data-field="${field}" aria-labelledby="phase-${field}-label" ${disabled?'disabled':''}><span class="datetime-values"><span>${date(value,{day:'numeric',month:'long',year:'numeric'})}</span><span class="datetime-time">${time(value)}</span>${I('calendar')}</span></button>`;
+  }
+  function renderPhaseEditor(){
+    const {id,phase:p,icon,color,endValue}=modal;
+    showModal(id===null?'Новый период':'Изменить период',`
+      <label class="phase-appearance-preview" id="phase-preview" for="phase-title" style="--phase-color:${color}"><span id="phase-preview-icon" aria-hidden="true">${I(icon)}</span><input id="phase-title" class="phase-title-input" aria-label="Название" maxlength="100" value="${esc(p.title)}" placeholder="Название периода" enterkeyhint="done"></label>
+      <div class="form-label" id="phase-icons-label">Значок</div><div class="phase-icon-options" role="group" aria-labelledby="phase-icons-label">${M.PHASE_ICONS.map(i=>`<button class="phase-icon-option ${i.icon===icon?'active':''}" data-action="phase-icon" data-value="${i.icon}" aria-label="${i.label}" title="${i.label}" aria-pressed="${i.icon===icon}">${I(i.icon)}</button>`).join('')}</div>
+      <div class="form-label" id="phase-colors-label">Цвет</div><div class="phase-color-options" role="group" aria-labelledby="phase-colors-label">${M.PHASE_COLORS.map((preset,i)=>`<button class="phase-color-option" style="--choice-color:${preset}" data-action="phase-color" data-value="${preset}" aria-label="Цвет ${i+1}" aria-pressed="${preset===color}">${I('check')}</button>`).join('')}</div>
+      ${phaseDateCard('start',local(p.startedAt))}
+      ${phaseDateCard('end',endValue,p.endedAt===null)}
+      <label class="form-label row phase-open-toggle"><span>Без даты завершения</span><input id="phase-open" type="checkbox" ${p.endedAt===null?'checked':''} data-change="phase-open"></label>
+      <label class="form-label" for="phase-note">Заметка</label><textarea id="phase-note" class="form-input">${esc(p.note)}</textarea>
+      <div class="error-box" id="modal-error" role="alert"></div>${id!==null?'<button class="danger-button" data-action="delete-phase" data-id="'+id+'">Удалить период</button>':''}
+    `,phaseFeedbackMarkup()+'<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="save-phase">'+(id===null?'Создать период':'Сохранить')+'</button>');
+    updatePhaseFeedback();
+  }
+  function phaseDateTime(field){
+    if(field==='end'&&$('phase-open').checked)return;
+    const parent=modal,value=new Date($('phase-'+field).value),returnFocus=focusBeforeModal;
+    parent.endValue=$('phase-end').value;parent.phase=editedPhase();
+    parent.scrollTop=$('modal').querySelector('.sheet-content').scrollTop;
+    openDateTime(value,{parent,field,returnFocus},field==='start'?'Дата и время начала':'Дата и время завершения',field==='start'?'Время начала':'Время завершения');
+  }
+  function updatePhaseAppearance(){
+    $('phase-preview').style.setProperty('--phase-color',modal.color);$('phase-preview-icon').innerHTML=I(modal.icon);
+    $('modal').querySelectorAll('[data-action="phase-icon"]').forEach(b=>{b.classList.toggle('active',b.dataset.value===modal.icon);b.setAttribute('aria-pressed',String(b.dataset.value===modal.icon));});
+    $('modal').querySelectorAll('[data-action="phase-color"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.value===modal.color)));
+  }
+  function phaseFeedbackMarkup(){return `<div class="reading-validation phase-validation" id="phase-validation" role="alert" hidden>${I('info')}<div><strong id="phase-validation-title"></strong><p class="reading-validation-message" id="phase-validation-message"></p></div></div>`;}
+  function editedPhase(){
+    const p=modal.phase;
+    const startedAt=$('phase-start').value===local(p.startedAt)?p.startedAt:new Date($('phase-start').value).toISOString();
+    const endedAt=$('phase-open').checked?null:p.endedAt&&$('phase-end').value===local(p.endedAt)?p.endedAt:new Date($('phase-end').value).toISOString();
+    return {...p,title:$('phase-title').value,icon:modal.icon,color:modal.color,startedAt,endedAt,note:$('phase-note').value};
+  }
+  function showPhaseError(error){
+    $('phase-validation').hidden=!error;
+    if(error){
+      $('phase-validation-title').textContent=error.code==='PHASE_LIMIT'?'Лимит одновременных периодов':'Проверьте даты периода';
+      $('phase-validation-message').textContent=error instanceof RangeError?'Укажите корректные дату и время.':error.message;
+    }
+  }
+  function updatePhaseFeedback(){
+    if(modal?.type!=='phase')return;
+    let error=null;
+    try{const p=editedPhase();M.savePhase(state.phases,{...p,title:p.title.trim()||'Название периода'},modal.id);}catch(e){error=e;}
+    showPhaseError(error);$('modal-error').textContent='';
+    $('modal').querySelector('[data-action="save-phase"]').disabled=!!error||!$('phase-title').value.trim();
+  }
+  function saveEditedPhase(){
+    if(!$('save-success').hidden)return;
+    try{
+      const created=modal.id===null;
+      const next=M.clone(state);next.phases=M.savePhase(state.phases,editedPhase(),modal.id);
+      if(persist(next)){closeModal();render();if(created)showSaveSuccess('phase');else toast('Период сохранён');}
+    }catch(error){if(error.code==='PHASE_LIMIT'){showPhaseError(error);$('modal').querySelector('[data-action="save-phase"]').disabled=true;}else $('modal-error').textContent=error instanceof RangeError?'Проверьте даты периода.':error.message;}
+  }
+
   function keypad(index,field){modal={type:'keypad',index,field,value:String(ui.entry.readings[index][field]),replace:true};const labels={systolic:'Верхнее давление',diastolic:'Нижнее давление',pulse:'Пульс'};showModal(labels[field],`<p style="text-align:center">${field==='systolic'?'60–260 мм рт. ст.':field==='diastolic'?'35–160 мм рт. ст.':'30–220 уд/мин'}</p><div id="keypad-value" class="keypad-value" data-metric="${field}" aria-live="polite">${modal.value||'—'}</div><div class="keypad-grid">${['1','2','3','4','5','6','7','8','9','clear','0','erase'].map(k=>`<button data-action="digit" data-value="${k}" ${k==='clear'?'class="small"':''} ${k==='erase'?'aria-label="Стереть цифру"':''}>${k==='clear'?'Очистить':k==='erase'?I('erase'):k}</button>`).join('')}</div>`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="accept-keypad">Готово</button>`);}
   function saveEntry(){
     if(!M.canSaveEntry(ui.entry)||!$('save-success').hidden)return;
@@ -497,7 +627,7 @@
     try{
       if(!window.XLSX)throw Error('Библиотека Excel не загрузилась.');
       const workbook=XLSX.utils.book_new();
-      const sheets=[['Измерения',[['Дата и время','Верхнее, мм рт. ст.','Нижнее, мм рт. ст.','Пульс, уд/мин','Самочувствие, 1–10','Тип','Замеров','Отметки','Заметка','Период'],...M.filter(state.sessions).map(s=>{const v=M.summary(s);return [full(s.measuredAt),v.averages.systolic,v.averages.diastolic,v.averages.pulse,s.wellbeing,s.mode==='series'?'Серия':'Один замер',s.readings.length,s.tags.join('; '),s.note,M.phaseFor(s,state.phases)?.title||''];})]],['Замеры',[['Номер записи','Замер','Дата и время','Верхнее, мм рт. ст.','Нижнее, мм рт. ст.','Пульс, уд/мин'],...M.filter(state.sessions).flatMap(s=>s.readings.map((r,i)=>[s.id,i+1,full(r.measuredAt),r.systolic,r.diastolic,r.pulse]))]],['Периоды',[['Название','Тип','Начало','Конец','Заметка','Записей','Верхнее, мм рт. ст.','Нижнее, мм рт. ст.','Пульс, уд/мин','Самочувствие'],...state.phases.map(p=>{const s=M.stats(state.sessions.filter(m=>M.inside(m,p)));return [p.title,kind(p).label,full(p.startedAt),p.endedAt?full(p.endedAt):'Идёт сейчас',p.note,s.count,s.count?s.averages.systolic:'',s.count?s.averages.diastolic:'',s.count?s.averages.pulse:'',s.count?s.averages.wellbeing:''];})]]];
+      const sheets=[['Измерения',[['Дата и время','Верхнее, мм рт. ст.','Нижнее, мм рт. ст.','Пульс, уд/мин','Самочувствие, 1–10','Тип','Замеров','Отметки','Заметка','Периоды'],...M.filter(state.sessions).map(s=>{const v=M.summary(s);return [full(s.measuredAt),v.averages.systolic,v.averages.diastolic,v.averages.pulse,s.wellbeing,s.mode==='series'?'Серия':'Один замер',s.readings.length,s.tags.join('; '),s.note,M.phasesFor(s,state.phases).map(p=>p.title).join('; ')];})]],['Замеры',[['Номер записи','Замер','Дата и время','Верхнее, мм рт. ст.','Нижнее, мм рт. ст.','Пульс, уд/мин'],...M.filter(state.sessions).flatMap(s=>s.readings.map((r,i)=>[s.id,i+1,full(r.measuredAt),r.systolic,r.diastolic,r.pulse]))]],['Периоды',[['Название','Значок','Цвет','Начало','Конец','Заметка','Записей','Верхнее, мм рт. ст.','Нижнее, мм рт. ст.','Пульс, уд/мин','Самочувствие'],...state.phases.map(p=>{const s=M.stats(state.sessions.filter(m=>M.inside(m,p)));return [p.title,M.PHASE_ICONS.find(i=>i.icon===kind(p).icon)?.label||kind(p).icon,kind(p).color,full(p.startedAt),p.endedAt?full(p.endedAt):'Идёт сейчас',p.note,s.count,s.count?s.averages.systolic:'',s.count?s.averages.diastolic:'',s.count?s.averages.pulse:'',s.count?s.averages.wellbeing:''];})]]];
       sheets.forEach(([name,rows])=>{const sheet=XLSX.utils.aoa_to_sheet(rows);sheet['!cols']=rows[0].map((_,i)=>({wch:i===0?29:20}));sheet['!autofilter']={ref:sheet['!ref']};XLSX.utils.book_append_sheet(workbook,sheet,name);});
       download('davlenie-'+theme+'.xlsx',XLSX.write(workbook,{bookType:'xlsx',type:'array'}),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }catch(error){toast('Экспорт не выполнен: '+error.message);}
@@ -507,6 +637,7 @@
   $('import-file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;try{restorePreview(JSON.parse(await file.text()));}catch{modal={type:'error'};showModal('Не удалось прочитать',`<p>Выберите резервную копию JSON приложения «Давление».</p>`,`<button class="measure-cta" data-action="close-modal">Понятно</button>`);}event.target.value='';});
   document.addEventListener('input',event=>{
     const target=event.target;
+    if(modal?.type==='phase'&&target.id==='phase-title'){updatePhaseFeedback();return;}
     if(theme==='clarity'&&modal?.type==='filters'&&target.closest('.history-filter-form')){
       readHistoryFilterFields();
       if(target.id==='filter-from'||target.id==='filter-to')modal.filters.interval=modal.filters.from||modal.filters.to?'custom':'all';
@@ -536,17 +667,19 @@
   document.addEventListener('focusout',event=>{
     if(ui.view==='entry'&&event.target.matches('.metric-field input'))updateEntryFeedback(null);
   });
-  document.addEventListener('change',event=>{const target=event.target;if(theme==='clarity'&&modal?.type==='filters'&&target.closest('.history-filter-form')){readHistoryFilterFields();if(target.id==='filter-from'||target.id==='filter-to')modal.filters.interval=modal.filters.from||modal.filters.to?'custom':'all';updateHistoryFilterPreview();return;}if(target.dataset.change==='scope'){ui.scope=target.value;ui.chartSelection={};render();}if(target.dataset.change==='phase-open')$('phase-end-wrap').hidden=target.checked;});
+  document.addEventListener('change',event=>{const target=event.target;if(theme==='clarity'&&modal?.type==='filters'&&target.closest('.history-filter-form')){readHistoryFilterFields();if(target.id==='filter-from'||target.id==='filter-to')modal.filters.interval=modal.filters.from||modal.filters.to?'custom':'all';updateHistoryFilterPreview();return;}if(target.dataset.change==='compare-baseline'){ui.compareBase=target.value;render();return;}if(target.dataset.change==='scope'){ui.scope=target.value;ui.chartSelection={};render();}if(modal?.type==='phase'&&target.id==='phase-open'){$('modal').querySelector('[data-action="phase-datetime"][data-field="end"]').disabled=target.checked;updatePhaseFeedback();}});
   function action(target){
     const a=target.dataset.action;
     switch(a){
       case 'nav':navigate(target.dataset.view);break;
+      case 'phase-group-toggle':ui.phaseGroups[target.dataset.group]=!target.closest('details').open;break;
       case 'back':navigate(ui.view==='phase'?'phases':ui.view==='entry'?'home':ui.view==='detail'?ui.detailReturn:'history');break;
       case 'detail':closeModal();navigate('detail',+target.dataset.id);break;
       case 'phase':navigate('phase',+target.dataset.id);break;
       case 'new':ui.entry=M.resumeDraft(state);ui.readingValidation=false;navigate('entry');break;
       case 'resume-draft':{const draft=M.resumableDraft(state);if(draft&&persist(M.storeDraft(state,draft),false)){ui.entry=draft;ui.readingValidation=false;navigate('entry');}break;}
       case 'entry-datetime':entryDateTime(+target.dataset.index);break;
+      case 'phase-datetime':phaseDateTime(target.dataset.field);break;
       case 'calendar-month':{const calendar=modal.type==='filters'?modal.calendar:modal;calendar.month=new Date(calendar.month.getFullYear(),calendar.month.getMonth()+Number(target.dataset.step),1);updateCalendar();break;}
       case 'calendar-day':if(modal.type==='filters')acceptHistoryFilterDate(target.dataset.value);else{modal.day=target.dataset.value;const day=new Date(modal.day+'T12:00');modal.month=new Date(day.getFullYear(),day.getMonth(),1);updateCalendar();}break;
       case 'calendar-today':{const today=new Date();if(modal.type==='filters')acceptHistoryFilterDate(local(today).slice(0,10));else{modal.day=local(today).slice(0,10);modal.month=new Date(today.getFullYear(),today.getMonth(),1);updateCalendar();}break;}
@@ -555,7 +688,14 @@
         const index=modal.index,scroll=$('app-content').scrollTop;
         // Use the visible wheel positions even when a scroll debounce is still pending.
         const wheelValue=field=>Math.max(0,Math.min(field==='hour'?23:59,Math.round($('modal').querySelector(`[data-wheel="${field}"]`).scrollTop/40)));
-        ui.entry.readings[index].measuredAt=modal.day+'T'+twoDigits(wheelValue('hour'))+':'+twoDigits(wheelValue('minute'));
+        const selected=modal.day+'T'+twoDigits(wheelValue('hour'))+':'+twoDigits(wheelValue('minute'));
+        if(modal.parent){
+          const {parent,field}=modal,key=field==='start'?'startedAt':'endedAt',original=parent.phase[key];
+          parent.phase[key]=original&&local(original)===selected?original:new Date(selected).toISOString();
+          if(field==='end')parent.endValue=selected;
+          closeModal();break;
+        }
+        ui.entry.readings[index].measuredAt=selected;
         ui.entry.readings[index].timeSource='manual';
         saveDraft();closeModal();render();$('app-content').scrollTop=scroll;
         $('app-content').querySelector(`[data-action="entry-datetime"][data-index="${index}"]`)?.focus({preventScroll:true});
@@ -612,7 +752,10 @@
       case 'edit-note':{const item=state.sessions.find(s=>s.id===+target.dataset.id);modal={type:'note',id:item.id};showModal('Заметка к измерению',`<label class="form-label" for="note-editor">Текст заметки</label><textarea id="note-editor" class="form-input" style="min-height:170px">${esc(item.note)}</textarea>`,`<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="save-note">Сохранить</button>`);break;}
       case 'save-note':{const next=M.clone(state);next.sessions.find(s=>s.id===modal.id).note=$('note-editor').value.trim();if(persist(next)){closeModal();render();toast('Заметка сохранена');}break;}
       case 'phase-editor':phaseEditor(target.dataset.id?+target.dataset.id:null);break;
-      case 'save-phase':try{const input={title:$('phase-title').value,kind:$('phase-kind').value,startedAt:new Date($('phase-start').value).toISOString(),endedAt:$('phase-open').checked?null:new Date($('phase-end').value).toISOString(),note:$('phase-note').value};const next=M.clone(state);next.phases=M.savePhase(state.phases,input,modal.id);if(persist(next)){closeModal();render();toast('Период сохранён');}}catch(error){$('modal-error').textContent=error instanceof RangeError?'Проверьте даты периода.':error.message;}break;
+      case 'phase-icon':modal.icon=target.dataset.value;updatePhaseAppearance();break;
+      case 'phase-color':modal.color=target.dataset.value;updatePhaseAppearance();break;
+      case 'save-phase':saveEditedPhase();break;
+      case 'finish-phase':try{const next=M.clone(state);next.phases=M.finishPhase(state.phases,+target.dataset.id);if(mutation(next,'Период завершён'))render();}catch(error){toast(error.message);}break;
       case 'delete-phase':{const id=+target.dataset.id;confirm('Удалить период?','Измерения останутся в дневнике. Удаление периода можно отменить.',()=>{const next=M.clone(state);next.phases=next.phases.filter(p=>p.id!==id);if(mutation(next,'Период удалён'))navigate('phases');},'Удалить');break;}
       case 'auto-backup':{const next=M.clone(state);next.autoBackup=!next.autoBackup;if(persist(next)){render();toast(next.autoBackup?'Автокопия включена':'Автокопия выключена');}break;}
       case 'copies':copiesModal();break;

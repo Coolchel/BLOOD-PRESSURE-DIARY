@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
+import { DataLoadState } from '@/components/data-load-state';
 import { MeasurementCard } from '@/components/measurement-card';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -12,7 +13,7 @@ import { measurementStats } from '@/constants/measurement-stats';
 import { useMeasurements } from '@/hooks/use-measurements';
 
 export default function HomeScreen() {
-  const { measurements, loading } = useMeasurements(12);
+  const { measurements, loading, error, refresh } = useMeasurements(12);
   const latest = measurements[0];
   const recent = measurements;
   const average =
@@ -23,6 +24,18 @@ export default function HomeScreen() {
   function addMeasurement() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/new-measurement');
+  }
+
+  if (loading || error) {
+    return (
+      <ScreenShell>
+        <Text style={styles.title}>Давление</Text>
+        <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label="измерения" />
+        <Pressable accessibilityRole="button" onPress={addMeasurement} style={styles.addButton}>
+          <Text style={styles.addText}>Новое измерение</Text>
+        </Pressable>
+      </ScreenShell>
+    );
   }
 
   return (
@@ -54,7 +67,7 @@ export default function HomeScreen() {
         />
       ) : (
         <GlassCard contentStyle={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>{loading ? 'Загружаем…' : 'Пока нет измерений'}</Text>
+          <Text style={styles.emptyTitle}>Пока нет измерений</Text>
           <Text style={styles.emptyText}>Добавьте первую запись — это займёт меньше минуты.</Text>
         </GlassCard>
       )}

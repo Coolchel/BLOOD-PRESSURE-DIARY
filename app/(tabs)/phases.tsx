@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
+import { DataLoadState } from '@/components/data-load-state';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
@@ -151,7 +152,7 @@ function PhaseCard({ phase }: { phase: PhaseWithStats }) {
 }
 
 export default function PhasesScreen() {
-  const { phases, loading } = usePhases();
+  const { phases, loading, error, refresh } = usePhases();
   const baseline = cleanBaseline(phases);
   const compared = phases.filter((phase) => phase.kind !== 'clean' && phase.stats.count > 0);
 
@@ -169,7 +170,8 @@ export default function PhasesScreen() {
         не меняются.
       </Text>
 
-      {baseline && compared.length > 0 ? (
+      <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label="периоды" />
+      {!loading && !error && baseline && compared.length > 0 ? (
         <>
           <Text style={styles.sectionTitle}>Сравнение</Text>
           <GlassCard contentStyle={styles.compareCard}>
@@ -192,7 +194,7 @@ export default function PhasesScreen() {
         ))}
       </View>
 
-      {!loading && phases.length === 0 ? (
+      {!loading && !error && phases.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Периодов пока нет</Text>
           <Text style={styles.emptyText}>

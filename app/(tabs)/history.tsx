@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MeasurementCard } from '@/components/measurement-card';
+import { DataLoadState } from '@/components/data-load-state';
 import { HistoryFilters } from '@/components/history-filters';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -21,7 +22,7 @@ export default function HistoryScreen() {
   const [filtersVisible, setFiltersVisible] = useState(false);
   const { measurements, loading, total, error, refresh } = useMeasurements(limit, historyQuery(filters));
   const hasFilters = filters.sort !== 'newest' || filters.startDate !== null || filters.endDate !== null;
-  const phases = usePhaseList();
+  const { phases, error: phaseError, loading: phaseLoading, refresh: refreshPhases } = usePhaseList();
 
   return (
     <>
@@ -58,6 +59,7 @@ export default function HistoryScreen() {
         </View>
         {hasFilters ? <Text style={styles.filterCaption}>{historyFilterLabel(filters)}</Text> : null}
 
+        {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label="метки периодов" /> : null}
         <View style={styles.list}>
           {measurements.map((measurement) => (
             <MeasurementCard

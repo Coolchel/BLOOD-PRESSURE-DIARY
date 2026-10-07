@@ -502,3 +502,38 @@ test('home chart spaces measurements evenly even when their timestamps are irreg
   const systolicDots = nodes.filter((node) => node.type === 'Circle').slice(0, 3);
   assert.deepEqual(systolicDots.map((node) => node.props.cx), [42, 185, 328]);
 });
+
+test('an empty filtered chart explains the selected interval instead of claiming the diary is empty', () => {
+  const message = 'Нет измерений в выбранном интервале';
+  const nodes = descendants(WeeklyChart({ measurements: [], emptyMessage: message }));
+  assert.ok(nodes.some((node) => node.type === 'Text' && node.props.children === message));
+});
+
+test('legacy version 1 design lab JSON restores into the mobile database and round-trips to the web diary', async (t) => {
+  const model = require('../design-lab/model.js');
+  const state = model.seed(Date.parse('2026-10-02T12:00:00.000Z'));
+  // This fixture uses only legacy periods, without parallel ranges or appearance metadata.
+  const legacy = { ...model.backup(state), version: 1 };
+  assert.ok(legacy.phases.every((p) => p.kind !== 'custom' && !('icon' in p) && !('color' in p)));
+  const db = await fixture(t);
+  await api.restoreBackup(db, legacy);
+  assert.equal(await api.countMeasurements(db), state.sessions.length);
+  const restored = model.restore(await api.buildBackupPayload(db));
+  assert.deepEqual(restored.sessions.map(({ createdAt, ...item }) => item).sort((a, b) => a.id - b.id), state.sessions);
+  assert.deepEqual(restored.phases.sort((a, b) => a.id - b.id), state.phases);
+});
+
+test('version 2 web backup is rejected by the legacy mobile importer without replacing current data', async (t) => {
+  const model = require('../design-lab/model.js');
+  const state = model.seed(Date.parse('2026-10-02T12:00:00.000Z'));
+  state.phases = model.savePhase(state.phases, {
+    kind: 'custom', title: 'Кофе', icon: 'coffee', color: model.PHASE_COLORS[0],
+    startedAt: state.phases.at(-1).startedAt, endedAt: null, note: 'Параллельный период',
+  });
+  const db = await fixture(t);
+  await api.addMeasurement(db, draft());
+  await api.createPhase(db, phase(1, 20));
+  const before = await snapshot(db);
+  await assert.rejects(api.restoreBackup(db, model.backup(state)), /unsupported backup/);
+  assert.deepEqual(await snapshot(db), before);
+});

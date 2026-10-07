@@ -71,19 +71,106 @@ test('history can show a selected observation period or records outside all peri
   assert.deepEqual(M.filter(records,{withoutPhase:true,phases}).map(s=>s.id),[3,1]);
   assert.deepEqual(M.filter(records,{withoutPhase:true,phases:[]}).map(s=>s.id),[3,2,1]);
 });
-test('period boundaries are exclusive at the end and each record belongs to one period', () => {
+test('adjacent legacy periods include the start and exclude the end', () => {
   const state=seed(),s=session([reading(120,state.phases[1].startedAt)]);
   assert.equal(M.phaseFor(s,state.phases).id,2);assert.equal(M.inside(s,state.phases[0]),false);
 });
-test('new period closes open predecessor without mutating source', () => {
+test('new parallel period leaves all existing periods unchanged', () => {
   const state=seed(),old=M.clone(state.phases),start=new Date(now).toISOString();
   const next=M.savePhase(state.phases,{kind:'energy',title:'Новый',startedAt:start,endedAt:null,note:''});
-  assert.equal(next.find(p=>p.id===3).endedAt,start);assert.deepEqual(state.phases,old);
+  assert.equal(next.find(p=>p.id===3).endedAt,null);assert.deepEqual(next.find(p=>p.id===3),old.find(p=>p.id===3));assert.deepEqual(state.phases,old);
 });
-test('conflicting creation and edit are rejected before any changes', () => {
+test('overlapping creation and edit change only the chosen period', () => {
   const state=seed(),old=M.clone(state.phases);
   const p={kind:'energy',title:'Конфликт',startedAt:state.phases[0].startedAt,endedAt:null,note:''};
-  assert.throws(()=>M.savePhase(state.phases,p));assert.throws(()=>M.savePhase(state.phases,p,2));assert.deepEqual(state.phases,old);
+  const created=M.savePhase(state.phases,p),edited=M.savePhase(state.phases,p,2);
+  assert.equal(created.length,4);assert.equal(M.phasesFor(state.sessions[0],created).length,2);
+  assert.equal(edited.length,3);assert.deepEqual(edited.find(p=>p.id===1),old.find(p=>p.id===1));assert.deepEqual(state.phases,old);
+});
+test('membership includes every matching period and keeps a crossing series whole by its first reading', () => {
+  const early={id:1,startedAt:'2026-10-02T07:00:00Z',endedAt:'2026-10-02T09:00:00Z'};
+  const parallel={id:2,startedAt:'2026-10-02T08:00:00Z',endedAt:null};
+  const later={id:3,startedAt:'2026-10-02T09:00:00Z',endedAt:null};
+  const series=session([reading(120,'2026-10-02T08:00:00Z'),reading(140,'2026-10-02T10:00:00Z')]);
+  assert.deepEqual(M.phasesFor(series,[early,parallel,later]).map(p=>p.id),[1,2]);
+  assert.equal(M.filter([series],{phase:early})[0].readings.length,2);
+  assert.equal(M.stats(M.filter([series],{phase:early})).systolic,130);
+  assert.equal(M.filter([series],{phase:later}).length,0);
+  const atEnd=session([reading(120,'2026-10-02T09:00:00Z')]);
+  assert.deepEqual(M.phasesFor(atEnd,[early,parallel,later]).map(p=>p.id),[2,3]);
+});
+test('backdated and edited period dates recalculate existing records without duplicating or changing them', () => {
+  const records=[session([reading(120,'2026-10-02T08:00:00Z')],1),session([reading(140,'2026-10-02T10:00:00Z')],2)],before=M.clone(records);
+  const input={kind:'custom',icon:'coffee',color:'#4f7188',title:'Кофе',note:'',startedAt:'2026-10-02T07:00:00Z',endedAt:null};
+  let phases=M.savePhase([],input);phases=M.savePhase(phases,{...input,title:'Сон'});
+  assert.equal(M.filter(records,{phase:phases[0]}).length,2);assert.equal(M.filter(records,{phase:phases[1]}).length,2);
+  const editedId=phases[0].id;
+  phases=M.savePhase(phases,{...phases[0],endedAt:'2026-10-02T09:00:00Z'},editedId);
+  assert.equal(M.filter(records,{phase:phases.find(p=>p.id===editedId)}).length,1);assert.equal(M.filter(records,{phase:phases.find(p=>p.id!==editedId)}).length,2);
+  assert.equal(M.filter(records,{withoutPhase:true,phases}).length,0);assert.deepEqual(records,before);
+});
+test('finishing one period preserves parallel periods and records the exact timestamp', () => {
+  const first={kind:'custom',icon:'moon',color:'#7961b4',title:'Сон',note:'',startedAt:'2026-10-02T07:00:00Z',endedAt:null};
+  let phases=M.savePhase([],first);phases=M.savePhase(phases,{...first,title:'Кофе'});const before=M.clone(phases);
+  const end=Date.parse('2026-10-02T09:00:12.345Z'),finished=M.finishPhase(phases,1,end);
+  assert.equal(finished.find(p=>p.id===1).endedAt,new Date(end).toISOString());assert.equal(finished.find(p=>p.id===2).endedAt,null);
+  assert.equal(M.phaseStatus(finished.find(p=>p.id===1),end),'finished');assert.deepEqual(phases,before);
+  assert.throws(()=>M.finishPhase(finished,1,end+1));assert.throws(()=>M.finishPhase(phases,99,end));
+  assert.equal(M.phaseStatus(first,Date.parse('2026-10-02T06:00:00Z')),'scheduled');
+});
+test('appearance supports 24 icons, custom colors and legacy periods without accepting unsafe values', () => {
+  assert.equal(M.PHASE_ICONS.length,24);assert.equal(new Set(M.PHASE_ICONS.map(i=>i.icon)).size,24);
+  const input={kind:'custom',icon:'coffee',color:'#123abc',title:'Кофе',note:'',startedAt:'2026-10-02T08:00:12.345Z',endedAt:null};
+  assert.deepEqual(M.phaseAppearance(M.savePhase([],input)[0]),{icon:'coffee',color:'#123abc',label:'Кофе'});
+  assert.equal(M.phaseAppearance({kind:'coffee',title:'Прежний'}).icon,'coffee');
+  assert.throws(()=>M.savePhase([],{...input,icon:'unknown'}));assert.throws(()=>M.savePhase([],{...input,color:'red;display:none'}));
+  let phases=[];for(let i=0;i<40;i++)phases=M.savePhase(phases,{...input,title:'Период '+i,startedAt:new Date(now+i*M.DAY).toISOString(),endedAt:new Date(now+(i+1)*M.DAY).toISOString()});assert.equal(phases.length,40);
+});
+test('three simultaneous periods are allowed and a fourth is rejected without changing existing data', () => {
+  const input={kind:'custom',icon:'coffee',color:'#4f7188',title:'Кофе',note:'',startedAt:'2026-10-02T07:00:00Z',endedAt:null};
+  let phases=[];for(let i=0;i<3;i++)phases=M.savePhase(phases,{...input,title:'Период '+i});
+  const before=M.clone(phases);assert.equal(M.MAX_CONCURRENT_PHASES,3);
+  assert.throws(()=>M.savePhase(phases,input),e=>e.code==='PHASE_LIMIT'&&e.conflictAt==='2026-10-02T07:00:00.000Z');
+  assert.deepEqual(phases,before);
+  // An edit replaces its own interval instead of counting it twice.
+  assert.equal(M.savePhase(phases,{...input,title:'Новое название'},1).length,3);
+});
+test('capacity checks historical and future dates and allows adjacent boundaries', () => {
+  const input={kind:'clean',title:'Период',note:'',startedAt:'2026-10-02T07:00:00Z',endedAt:'2026-10-02T09:00:00Z'};
+  let phases=[];for(let i=0;i<3;i++)phases=M.savePhase(phases,input);
+  const before=M.clone(phases);
+  assert.throws(()=>M.savePhase(phases,{...input,startedAt:'2026-10-02T08:00:00Z'}),/не более 3/);
+  let adjacent=M.savePhase(phases,{...input,startedAt:input.endedAt,endedAt:null});
+  assert.equal(adjacent.length,4);assert.equal(M.phaseLimitConflict(adjacent),null);
+  assert.throws(()=>M.savePhase(adjacent,{...adjacent.find(p=>p.id===4),startedAt:'2026-10-02T08:59:59Z'},4),/не более 3/);
+  for(let i=0;i<2;i++)adjacent=M.savePhase(adjacent,{...input,startedAt:input.endedAt,endedAt:null});
+  assert.throws(()=>M.savePhase(adjacent,{...adjacent.find(p=>p.id===1),endedAt:'2026-10-02T09:01:00Z'},1),/не более 3/);
+  let future=M.savePhase([],{...input,startedAt:'2027-01-01T00:00:00Z',endedAt:null});
+  future=M.savePhase(future,{...input,startedAt:'2027-02-01T00:00:00Z',endedAt:null});
+  future=M.savePhase(future,{...input,startedAt:'2027-03-01T00:00:00Z',endedAt:null});
+  assert.throws(()=>M.savePhase(future,{...input,startedAt:'2027-04-01T00:00:00Z',endedAt:null}),/не более 3/);
+  assert.deepEqual(phases,before);
+});
+test('changing a completed period into an open interval enforces the same limit', () => {
+  const input={kind:'clean',title:'Период',note:'',startedAt:'2026-10-02T07:00:00Z',endedAt:'2026-10-02T09:00:00Z'};
+  let phases=M.savePhase([],input);
+  for(let i=0;i<3;i++)phases=M.savePhase(phases,{...input,startedAt:input.endedAt,endedAt:null});
+  const before=M.clone(phases);
+  assert.throws(()=>M.savePhase(phases,{...phases.find(p=>p.id===1),endedAt:null},1),/не более 3/);
+  assert.deepEqual(phases,before);
+});
+test('restore rejects excessive overlap but older local diaries can load and reduce it safely', () => {
+  const input={kind:'clean',title:'Период',note:'',startedAt:'2026-10-02T07:00:00.000Z',endedAt:null};
+  const phases=Array.from({length:4},(_,i)=>({...input,id:i+1,title:'Период '+i}));
+  const state={...seed(),phases},before=M.clone(state),payload=M.backup(state),payloadBefore=M.clone(payload);
+  assert.throws(()=>M.restore(payload),e=>e.code==='PHASE_LIMIT');
+  assert.deepEqual(M.restore(payload,[],{enforcePhaseLimit:false}).phases,phases);
+  const repaired=M.finishPhase(phases,1,Date.parse('2026-10-02T09:00:00Z'));
+  assert.equal(repaired.find(p=>p.id===1).endedAt,'2026-10-02T09:00:00.000Z');
+  assert.equal(repaired.filter(p=>p.endedAt===null).length,3);
+  assert.throws(()=>M.savePhase(repaired,input),/не более 3/);
+  assert.throws(()=>M.restore({...payload,phases:undefined},phases),/не более 3/);
+  assert.deepEqual(state,before);assert.deepEqual(payload,payloadBefore);
 });
 test('invalid periods, blank names, inverted bounds and missing IDs are rejected', () => {
   const p={kind:'clean',title:'Период',startedAt:'2026-10-02T08:00:00.000Z',endedAt:null,note:''};
@@ -121,9 +208,18 @@ test('timezone offsets normalize and impossible dates and times are rejected', (
 });
 test('malformed backups fail without changing current data', () => {
   const original=seed();
-  const changes=[p=>p.sessions.push(p.sessions[0]),p=>p.readings[0].session_id=9999,p=>p.readings[0].position=7,p=>p.readings[0].systolic=70,p=>p.sessions[0].wellbeing=99,p=>p.sessions[0].tags=[null],p=>p.phases[1].started_at=p.phases[0].started_at,p=>p.phases.push(p.phases[0]),p=>p.sessions[0].note=null,p=>p.readings[0].measured_at=null];
+  const changes=[p=>p.sessions.push(p.sessions[0]),p=>p.readings[0].session_id=9999,p=>p.readings[0].position=7,p=>p.readings[0].systolic=70,p=>p.sessions[0].wellbeing=99,p=>p.sessions[0].tags=[null],p=>p.phases[1].ended_at=p.phases[1].started_at,p=>p.phases.push(p.phases[0]),p=>p.sessions[0].note=null,p=>p.readings[0].measured_at=null,p=>p.phases[0].color='invalid',p=>p.phases[0].icon='unknown'];
   changes.forEach(change=>{const p=M.backup(original);change(p);assert.throws(()=>M.restore(p,original.phases));});
   assert.deepEqual(original,seed());
+});
+test('version 2 backup preserves overlapping periods and appearance while version 1 remains readable', () => {
+  const state=seed(),before=M.clone(state.sessions);
+  state.phases=M.savePhase(state.phases,{kind:'custom',title:'Кофе',icon:'coffee',color:'#123abc',note:'Параллельно',startedAt:state.phases[0].startedAt,endedAt:null});
+  const payload=M.backup(state);assert.equal(payload.version,2);
+  assert.deepEqual(M.restore(payload).phases,state.phases);assert.deepEqual(state.sessions,before);
+  const legacy=M.backup(seed());legacy.version=1;
+  assert.deepEqual(M.restore(legacy).phases,seed().phases);
+  assert.throws(()=>M.restore({...payload,version:99}));
 });
 test('automatic backup respects disable, retains seven days and avoids erasing last copy with empty state', () => {
   let state=seed();for(let i=0;i<10;i++)state=M.withAutoBackup(state,now+i*M.DAY);

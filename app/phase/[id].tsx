@@ -1,10 +1,11 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
+import { DataLoadState } from '@/components/data-load-state';
 import { MeasurementCard } from '@/components/measurement-card';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -28,33 +29,48 @@ export default function PhaseDetailsScreen() {
   const [phase, setPhase] = useState<ExperimentPhase | null>(null);
   const [measurements, setMeasurements] = useState<MeasurementSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const requestId = useRef(0);
 
   const load = useCallback(async () => {
+    const currentRequest = ++requestId.current;
+    setLoading(true);
+    setError(false);
     const numericId = Number(id);
-    if (!Number.isInteger(numericId)) {
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      setPhase(null);
+      setMeasurements([]);
       setLoading(false);
       return;
     }
 
     try {
       const found = await getPhaseById(db, numericId);
+      const items = found ? await getMeasurementsInPhase(db, found) : [];
+      if (currentRequest !== requestId.current) return;
       setPhase(found);
-      setMeasurements(found ? await getMeasurementsInPhase(db, found) : []);
+      setMeasurements(items);
+    } catch {
+      if (currentRequest === requestId.current) setError(true);
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
   }, [db, id]);
 
   useFocusEffect(
     useCallback(() => {
       void load();
+      return () => { requestId.current += 1; };
     }, [load]),
   );
 
-  if (loading) {
+  if (loading || error) {
     return (
       <ScreenShell>
-        <Text style={styles.loading}>Загружаем период…</Text>
+        <Pressable accessibilityLabel="Назад" onPress={() => router.back()} style={styles.backButton}>
+          <IconSymbol name="chevron.left" size={22} color={Palette.text} />
+        </Pressable>
+        <DataLoadState loading={loading} error={error} onRetry={() => void load()} label="период" />
       </ScreenShell>
     );
   }

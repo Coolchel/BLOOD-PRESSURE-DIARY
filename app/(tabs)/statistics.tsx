@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
+import { DataLoadState } from '@/components/data-load-state';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WeeklyChart } from '@/components/weekly-chart';
@@ -16,12 +17,12 @@ import { usePhaseList } from '@/hooks/use-phases';
 import { phaseKindInfo } from '@/types/experiment';
 
 export default function StatisticsScreen() {
-  const { measurements: allMeasurements } = useMeasurements(-1);
+  const { measurements: allMeasurements, loading, error, refresh } = useMeasurements(-1);
   const [period, setPeriod] = useState<StatisticsInterval>('week');
   const [averageMode, setAverageMode] = useState<'time' | 'phase'>('time');
   const [averagePeriod, setAveragePeriod] = useState<StatisticsInterval>('week');
   const [phaseId, setPhaseId] = useState<number | null>(null);
-  const phases = usePhaseList();
+  const { phases, error: phaseError, loading: phaseLoading, refresh: refreshPhases } = usePhaseList();
 
   const selected = STATISTICS_INTERVALS.find((item) => item.key === period) ?? STATISTICS_INTERVALS[0];
   const { window, measurements } = useMemo(() => {
@@ -40,10 +41,20 @@ export default function StatisticsScreen() {
   const hasAverageData = stats.count > 0;
   const hasData = measurements.length > 0;
 
+  if (loading || error) {
+    return (
+      <ScreenShell>
+        <Text style={styles.title}>Статистика</Text>
+        <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label="измерения" />
+      </ScreenShell>
+    );
+  }
+
   return (
     <ScreenShell>
       <Text style={styles.eyebrow}>ОБЗОР ПОКАЗАТЕЛЕЙ</Text>
       <Text style={styles.title}>Статистика</Text>
+      {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label="периоды" /> : null}
       <Text style={styles.subtitle}>
         {selected.days === null
           ? `Все записи: ${measurements.length}`
@@ -79,7 +90,7 @@ export default function StatisticsScreen() {
           </View>
           <IconSymbol name="chart.line.uptrend.xyaxis" size={23} color={Palette.coral} />
         </View>
-        <WeeklyChart measurements={measurements} phases={phases} window={window} />
+        <WeeklyChart measurements={measurements} phases={phases} window={window} emptyMessage="Нет измерений в выбранном интервале" />
       </GlassCard>
 
       <GlassCard contentStyle={styles.chartCard} style={styles.chartSpacing}>
@@ -90,7 +101,7 @@ export default function StatisticsScreen() {
           </View>
           <IconSymbol name="waveform.path.ecg" size={23} color="#6D78A8" />
         </View>
-        <WeeklyChart measurements={measurements} metric="pulse" window={window} />
+        <WeeklyChart measurements={measurements} metric="pulse" window={window} emptyMessage="Нет измерений в выбранном интервале" />
       </GlassCard>
 
       <GlassCard contentStyle={styles.chartCard}>
@@ -103,7 +114,7 @@ export default function StatisticsScreen() {
             <Text style={styles.numberIconText}>10</Text>
           </View>
         </View>
-        <WeeklyChart measurements={measurements} metric="wellbeing" window={window} />
+        <WeeklyChart measurements={measurements} metric="wellbeing" window={window} emptyMessage="Нет измерений в выбранном интервале" />
       </GlassCard>
 
       <Text style={styles.sectionTitle}>Средние значения</Text>

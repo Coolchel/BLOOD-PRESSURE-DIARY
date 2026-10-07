@@ -6,6 +6,7 @@
   'use strict';
   const DAY = 86400000;
   const MAX_SERIES_READINGS = 10;
+  const MAX_CONCURRENT_PHASES = 3;
   const READING_RANGES = {systolic:[60,260],diastolic:[35,160],pulse:[30,220]};
   const TAGS = ['Нормально', 'Спокойно', 'Бодрость', 'Усталость', 'Слабость', 'Сонливость', 'Головная боль', 'Головокружение', 'Тошнота', 'Одышка', 'Сердцебиение', 'Боль в груди', 'Стресс', 'После кофе', 'После лекарства', 'После нагрузки'];
   const KINDS = [
@@ -15,6 +16,21 @@
     { kind: 'alcohol', label: 'Алкоголь', color: '#7961b4', icon: 'wine' },
     { kind: 'mixed', label: 'Всё вместе', color: '#c25b4c', icon: 'layers' },
   ];
+  const PHASE_ICONS = [
+    ['coffee','Кофе'],['leaf','Лист'],['bolt','Энергия'],['wine','Бокал'],['layers','Слои'],['heartPulse','Сердце'],
+    ['pill','Лекарство'],['moon','Сон'],['sun','Солнце'],['walk','Прогулка'],['dumbbell','Тренировка'],['apple','Питание'],
+    ['drop','Вода'],['cup','Чай'],['flower','Цветок'],['mountain','Горы'],['book','Книга'],['briefcase','Работа'],
+    ['home','Дом'],['plane','Поездка'],['shield','Щит'],['clock','Часы'],['calendar','Календарь'],['star','Звезда'],
+  ].map(([icon,label])=>({icon,label}));
+  const PHASE_COLORS = ['#495b35','#16806b','#4f7188','#627eaa','#7961b4','#9a6240','#a97b0c','#c25b4c','#aa637a','#72796c'];
+  function phaseAppearance(p) {
+    const legacy=KINDS.find(k=>k.kind===p.kind)||KINDS[0];
+    return {icon:p.icon||legacy.icon,color:p.color||legacy.color,label:p.title};
+  }
+  function phaseStatus(p,now=Date.now()) {
+    if(Date.parse(p.startedAt)>now)return 'scheduled';
+    return p.endedAt!==null&&Date.parse(p.endedAt)<=now?'finished':'active';
+  }
   const SORTS = [ ['newest','Сначала новые'], ['oldest','Сначала старые'], ['systolic-desc','Верхнее ↓'], ['systolic-asc','Верхнее ↑'], ['diastolic-desc','Нижнее ↓'], ['diastolic-asc','Нижнее ↑'], ['pulse-desc','Пульс ↓'], ['pulse-asc','Пульс ↑'] ];
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const readingHasValues = r => ['systolic','diastolic','pulse'].some(field => String(r[field] ?? '') !== '');
@@ -134,7 +150,8 @@
     return { count:items.length, averages, ...Object.fromEntries(Object.entries(averages).map(([k,v]) => [k,k === 'wellbeing' ? Math.round(v*10)/10 : Math.round(v)])) };
   }
   const inside = (s,p) => Date.parse(s.measuredAt) >= Date.parse(p.startedAt) && (p.endedAt === null || Date.parse(s.measuredAt) < Date.parse(p.endedAt));
-  const phaseFor = (s,phases) => phases.find(p => inside(s,p));
+  const phasesFor = (s,phases) => phases.filter(p => inside(s,p));
+  const phaseFor = (s,phases) => phasesFor(s,phases)[0];
   function historyInterval(preset, now=Date.now()) {
     if (!['today','7','30'].includes(preset)) return {from:'',to:''};
     const end=new Date(now),start=new Date(now);
@@ -166,20 +183,52 @@
     return Object.fromEntries(['systolic','diastolic','pulse'].map(key => [key, readings.length ? readings.reduce((range,r) => [Math.min(range[0],r[key]),Math.max(range[1],r[key])],[Infinity,-Infinity]) : null]));
   }
   function phaseInput(input) {
-    if (!input || !KINDS.some(k => k.kind === input.kind) || typeof input.title !== 'string' || !input.title.trim() || typeof input.note !== 'string') throw new Error('Укажите название и тип периода.');
+    if (!input || !(input.kind==='custom'||KINDS.some(k => k.kind === input.kind)) || typeof input.title !== 'string' || !input.title.trim() || typeof input.note !== 'string') throw new Error('Укажите название периода.');
+    if(input.icon!==undefined&&!PHASE_ICONS.some(i=>i.icon===input.icon))throw new Error('Выберите значок периода.');
+    if(input.color!==undefined&&(typeof input.color!=='string'||!/^#[0-9a-f]{6}$/i.test(input.color)))throw new Error('Выберите цвет периода.');
+    if(input.kind==='custom'&&(!input.icon||!input.color))throw new Error('Выберите цвет и значок периода.');
     const result = { ...input, title:input.title.trim(), note:input.note.trim(), startedAt:iso(input.startedAt), endedAt:input.endedAt === null ? null : iso(input.endedAt) };
     if (result.endedAt !== null && result.endedAt <= result.startedAt) throw new Error('Конец периода должен быть позже начала.');
     return result;
   }
-  const overlaps = (a,b) => Date.parse(a.startedAt) < (b.endedAt === null ? Infinity : Date.parse(b.endedAt)) && Date.parse(b.startedAt) < (a.endedAt === null ? Infinity : Date.parse(a.endedAt));
+  function phaseLimitConflict(phases,previous=[]) {
+    const events=[];
+    const add=(items,old)=>items.forEach(p=>{
+      events.push({time:Date.parse(p.startedAt),delta:1,old});
+      if(p.endedAt!==null)events.push({time:Date.parse(p.endedAt),delta:-1,old});
+    });
+    add(phases,false);add(previous,true);events.sort((a,b)=>a.time-b.time);
+    let count=0,oldCount=0;
+    for(let i=0;i<events.length;){
+      const time=events[i].time;
+      // Apply all boundaries together: a period ending here no longer overlaps a new one.
+      do{const e=events[i++];if(e.old)oldCount+=e.delta;else count+=e.delta;}while(i<events.length&&events[i].time===time);
+      if(count>MAX_CONCURRENT_PHASES&&count>oldCount)return new Date(time).toISOString();
+    }
+    return null;
+  }
+  function assertPhaseLimit(phases,previous=[]) {
+    const conflict=phaseLimitConflict(phases,previous);
+    if(conflict){
+      const error=new Error('Одновременно могут идти не более 3 периодов. Измените даты или завершите один из периодов.');
+      error.code='PHASE_LIMIT';error.conflictAt=conflict;throw error;
+    }
+  }
   function savePhase(phases,input,id=null) {
     const next = phaseInput(input);
     if (id !== null && !phases.some(p => p.id === id)) throw new Error('Период не найден.');
-    let result = clone(phases).filter(p => p.id !== id);
-    if (id === null) result = result.map(p => p.endedAt === null && p.startedAt < next.startedAt ? { ...p,endedAt:next.startedAt } : p);
-    if (result.some(p => overlaps(p,next))) throw new Error('Даты пересекаются с другим периодом. Измените начало или конец.');
+    const result = clone(phases).filter(p => p.id !== id);
     next.id = id ?? Math.max(0,...phases.map(p => p.id))+1;
-    return [...result,next].sort((a,b) => b.startedAt.localeCompare(a.startedAt));
+    const saved=[...result,next].sort((a,b) => b.startedAt.localeCompare(a.startedAt));
+    // Existing diaries remain readable; shortening an older excessive overlap is allowed.
+    assertPhaseLimit(saved,phases);
+    return saved;
+  }
+  function finishPhase(phases,id,now=Date.now()) {
+    const p=phases.find(p=>p.id===id);
+    if(!p)throw new Error('Период не найден.');
+    if(phaseStatus(p,now)!=='active')throw new Error('Завершить можно только действующий период.');
+    return savePhase(phases,{...p,endedAt:new Date(now).toISOString()},id);
   }
   function baseline(sessions,phases) { return stats(sessions.filter(s => phases.some(p => p.kind === 'clean' && inside(s,p)))); }
   function chartPoints(sessions,max=24) {
@@ -195,13 +244,13 @@
     });
   }
   function backup(state) {
-    return { app:'Давление',version:1,exportedAt:new Date().toISOString(),
+    return { app:'Давление',version:2,exportedAt:new Date().toISOString(),
       sessions:state.sessions.map(s => ({ id:s.id,measured_at:s.measuredAt,wellbeing:s.wellbeing,tags:s.tags,note:s.note,mode:s.mode,created_at:s.createdAt || s.measuredAt })),
       readings:state.sessions.flatMap(s => s.readings.map((r,position) => ({ session_id:s.id,position,systolic:r.systolic,diastolic:r.diastolic,pulse:r.pulse,measured_at:r.measuredAt }))),
-      phases:state.phases.map(p => ({ id:p.id,kind:p.kind,title:p.title,started_at:p.startedAt,ended_at:p.endedAt,note:p.note,created_at:p.createdAt || p.startedAt })) };
+      phases:state.phases.map(p => ({ id:p.id,kind:p.kind,title:p.title,...(p.icon!==undefined?{icon:p.icon}:{}),...(p.color!==undefined?{color:p.color}:{}),started_at:p.startedAt,ended_at:p.endedAt,note:p.note,created_at:p.createdAt || p.startedAt })) };
   }
-  function restore(payload,currentPhases=[]) {
-    if (!payload || payload.app !== 'Давление' || payload.version !== 1 || !Array.isArray(payload.sessions) || !Array.isArray(payload.readings) || !payload.sessions.length) throw new Error('Выберите непустую резервную копию JSON приложения «Давление».');
+  function restore(payload,currentPhases=[],{enforcePhaseLimit=true}={}) {
+    if (!payload || payload.app !== 'Давление' || ![1,2].includes(payload.version) || !Array.isArray(payload.sessions) || !Array.isArray(payload.readings) || !payload.sessions.length) throw new Error('Выберите непустую резервную копию JSON приложения «Давление».');
     const idOK = id => Number.isSafeInteger(id) && id>0;
     if (payload.sessions.some(s => !s || !idOK(s.id)) || new Set(payload.sessions.map(s=>s.id)).size !== payload.sessions.length) throw new Error('Повторяющиеся или некорректные номера записей.');
     const ids = new Set(payload.sessions.map(s=>s.id));
@@ -215,9 +264,9 @@
     let phases = clone(currentPhases);
     if (payload.phases !== undefined) {
       if (!Array.isArray(payload.phases) || payload.phases.some(p => !p || !idOK(p.id)) || new Set(payload.phases.map(p=>p.id)).size !== payload.phases.length) throw new Error('Некорректные периоды.');
-      phases = payload.phases.map(p => phaseInput({ id:p.id,kind:p.kind,title:p.title,note:p.note,startedAt:p.started_at,endedAt:p.ended_at == null ? null : p.ended_at }));
-      if (phases.some((p,i) => phases.slice(i+1).some(q => overlaps(p,q)))) throw new Error('Периоды в копии пересекаются.');
+      phases = payload.phases.map(p => phaseInput({ id:p.id,kind:p.kind,title:p.title,note:p.note,...(p.icon!==undefined?{icon:p.icon}:{}),...(p.color!==undefined?{color:p.color}:{}),startedAt:p.started_at,endedAt:p.ended_at == null ? null : p.ended_at }));
     }
+    if(enforcePhaseLimit)assertPhaseLimit(phases);
     return { sessions,phases };
   }
   function seed(now=Date.now()) {
@@ -251,5 +300,5 @@
     next.copies=[{ date,at:stamp,payload:backup(next) },...(next.copies||[]).filter(c=>c.date!==date)].slice(0,7);
     return next;
   }
-  return { DAY,MAX_SERIES_READINGS,TAGS,KINDS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,inside,phaseFor,historyInterval,filter,ranges,savePhase,baseline,chartPoints,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
+  return { DAY,MAX_SERIES_READINGS,MAX_CONCURRENT_PHASES,TAGS,KINDS,PHASE_ICONS,PHASE_COLORS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,inside,phaseFor,phasesFor,phaseAppearance,phaseStatus,phaseLimitConflict,historyInterval,filter,ranges,savePhase,finishPhase,baseline,chartPoints,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
 });

@@ -23,6 +23,7 @@ export type ChartMetric = 'pressure' | 'pulse' | 'wellbeing';
 
 type WeeklyChartProps = {
   measurements: MeasurementSummary[];
+  emptyMessage?: string;
   metric?: ChartMetric;
   maxPoints?: number;
   phases?: ExperimentPhase[];
@@ -69,6 +70,7 @@ function formatAxisDate(iso: string) {
 
 export function WeeklyChart({
   measurements,
+  emptyMessage = 'Добавьте измерение, чтобы увидеть динамику',
   metric = 'pressure',
   maxPoints,
   phases,
@@ -113,7 +115,7 @@ export function WeeklyChart({
   if (!points.length) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>Добавьте измерение, чтобы увидеть динамику</Text>
+        <Text style={styles.emptyText}>{emptyMessage}</Text>
       </View>
     );
   }

@@ -1,46 +1,47 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useState } from 'react';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { useCallback, useRef, useState } from 'react';
 
 import { getPhases, getPhasesWithStats } from '@/data/database';
 import type { ExperimentPhase, PhaseWithStats } from '@/types/experiment';
 
-export function usePhases() {
+function usePhaseData<T>(load: (db: SQLiteDatabase) => Promise<T[]>) {
   const db = useSQLiteContext();
-  const [phases, setPhases] = useState<PhaseWithStats[]>([]);
+  const [phases, setPhases] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const requestId = useRef(0);
 
   const refresh = useCallback(async () => {
+    const currentRequest = ++requestId.current;
+    setLoading(true);
+    setError(false);
     try {
-      setPhases(await getPhasesWithStats(db));
+      const result = await load(db);
+      if (currentRequest === requestId.current) setPhases(result);
+    } catch {
+      if (currentRequest === requestId.current) setError(true);
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
-  }, [db]);
+  }, [db, load]);
 
   useFocusEffect(
     useCallback(() => {
       void refresh();
+      return () => { requestId.current += 1; };
     }, [refresh]),
   );
 
-  return { phases, loading, refresh };
+  return { phases, loading, error, refresh };
+}
+
+export function usePhases() {
+  return usePhaseData<PhaseWithStats>(getPhasesWithStats);
 }
 
 /** Только сами периоды, без агрегатов — для меток на карточках измерений. */
 export function usePhaseList() {
-  const db = useSQLiteContext();
-  const [phases, setPhases] = useState<ExperimentPhase[]>([]);
-
-  const refresh = useCallback(async () => {
-    setPhases(await getPhases(db));
-  }, [db]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh]),
-  );
-
-  return phases;
+  return usePhaseData<ExperimentPhase>(getPhases);
 }
