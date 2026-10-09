@@ -8,5 +8,5 @@
 .phone[data-font='nunitosans'], [data-font-sample='nunitosans'] { --interface-font: 'Diary Nunito Sans', sans-serif; }
 .phone[data-theme='clarity'][data-font] { font-family: var(--interface-font); font-optical-sizing: auto; }
 .phone[data-theme='clarity'][data-font] :is(.app-header h1, .section-title, .section-title .small) { font-family: var(--interface-font); }
-.phone[data-theme='clarity'][data-font] :is(.app-header h1, .section-title) { font-weight: 500; letter-spacing: -.7px; }
+.phone[data-theme='clarity'][data-font] .app-header h1 { font-weight: 500; letter-spacing: -.7px; }
 [data-font-sample] { font-family: var(--interface-font); }

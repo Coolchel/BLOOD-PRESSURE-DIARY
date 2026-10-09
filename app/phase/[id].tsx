@@ -2,11 +2,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlassCard } from '@/components/glass-card';
 import { DataLoadState } from '@/components/data-load-state';
 import { MeasurementCard } from '@/components/measurement-card';
+import { SaveSuccessOverlay } from '@/components/save-success-overlay';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WeeklyChart } from '@/components/weekly-chart';
@@ -19,6 +20,7 @@ import {
   pluralRecords,
 } from '@/constants/phase-format';
 import { getMeasurementsInPhase, getPhaseById } from '@/data/database';
+import { savePhase } from '@/data/phase-actions';
 import type { ExperimentPhase } from '@/types/experiment';
 import { phaseKindInfo } from '@/types/experiment';
 import type { MeasurementSummary } from '@/types/measurement';
@@ -30,7 +32,10 @@ export default function PhaseDetailsScreen() {
   const [measurements, setMeasurements] = useState<MeasurementSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [finished, setFinished] = useState(false);
   const requestId = useRef(0);
+  const finishInProgress = useRef(false);
 
   const load = useCallback(async () => {
     const currentRequest = ++requestId.current;
@@ -64,6 +69,28 @@ export default function PhaseDetailsScreen() {
     }, [load]),
   );
 
+  async function finishPhase() {
+    if (!phase || finishInProgress.current) return;
+    const endedAt = new Date().toISOString();
+    if (phase.startedAt >= endedAt || (phase.endedAt !== null && phase.endedAt <= endedAt)) return;
+    const currentRequest = requestId.current;
+    finishInProgress.current = true;
+    setFinishing(true);
+    try {
+      await savePhase(db, { ...phase, endedAt }, phase.id);
+      if (currentRequest !== requestId.current) return;
+      setPhase({ ...phase, endedAt });
+      setFinished(true);
+    } catch {
+      if (currentRequest === requestId.current) {
+        Alert.alert('Не получилось завершить период', 'Попробуйте ещё раз.');
+      }
+    } finally {
+      finishInProgress.current = false;
+      setFinishing(false);
+    }
+  }
+
   if (loading || error) {
     return (
       <ScreenShell>
@@ -92,6 +119,9 @@ export default function PhaseDetailsScreen() {
   const info = phaseKindInfo(phase.kind);
   const hasData = measurements.length > 0;
   const stats = measurementStats(measurements);
+  const now = Date.now();
+  const canFinish = Date.parse(phase.startedAt) < now &&
+    (phase.endedAt === null || Date.parse(phase.endedAt) > now);
 
   return (
     <ScreenShell contentContainerStyle={styles.content}>
@@ -112,6 +142,7 @@ export default function PhaseDetailsScreen() {
         </View>
         <Pressable
           accessibilityLabel="Изменить период"
+          disabled={finishing}
           hitSlop={12}
           onPress={() =>
             router.push({ pathname: '/phase-editor', params: { id: String(phase.id) } })
@@ -133,6 +164,17 @@ export default function PhaseDetailsScreen() {
         ) : null}
         <Text style={styles.countText}>{pluralRecords(measurements.length)}</Text>
       </View>
+
+      {canFinish ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={finishing}
+          onPress={() => void finishPhase()}
+          style={[styles.finishButton, finishing && styles.finishDisabled]}>
+          <IconSymbol name="checkmark" size={18} color={Palette.coral} />
+          <Text style={styles.finishText}>{finishing ? 'Завершаем…' : 'Завершить период'}</Text>
+        </Pressable>
+      ) : null}
 
       <Text style={styles.sectionLabel}>СРЕДНЕЕ ЗА ПЕРИОД</Text>
       <GlassCard contentStyle={styles.statsCard}>
@@ -199,6 +241,12 @@ export default function PhaseDetailsScreen() {
       {!hasData ? (
         <Text style={styles.emptyText}>В этот период измерений пока нет.</Text>
       ) : null}
+      <SaveSuccessOverlay
+        visible={finished}
+        title="Период завершён"
+        subtitle="Дата завершения сохранена"
+        onDone={() => { setFinished(false); void load(); }}
+      />
     </ScreenShell>
   );
 }
@@ -254,6 +302,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: Spacing.sm,
+  },
+  finishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderColor: Palette.line,
+    borderRadius: Radius.medium,
+    backgroundColor: Palette.coralSoft,
+  },
+  finishText: {
+    color: Palette.coral,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  finishDisabled: {
+    opacity: 0.5,
   },
   kindChip: {
     flexDirection: 'row',
