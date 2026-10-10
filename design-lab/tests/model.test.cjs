@@ -18,6 +18,15 @@ test('statistics preferences round trip applied choices without changing diary d
   }
   assert.deepEqual(state,before);
 });
+test('comparison calculation preference persists independently of the overview',()=>{
+  const phases=seed().phases;
+  for(const [summary,compareSummary] of [['mean','median'],['median','mean']]){
+    const saved=JSON.parse(JSON.stringify(M.statisticsPreferences({summary,compareSummary},phases)));
+    const restored=M.statisticsPreferences(saved,phases);
+    assert.equal(restored.summary,summary);assert.equal(restored.compareSummary,compareSummary);
+  }
+  for(const compareSummary of [undefined,null,'unknown',[],{}])assert.equal(M.statisticsPreferences({summary:'median',compareSummary},phases).compareSummary,'mean');
+});
 
 test('statistics preferences recover invalid fields and removed periods independently',()=>{
   const state=seed(),defaults=M.statisticsPreferences(null,state.phases);
@@ -116,10 +125,41 @@ test('statistics extremes link to raw reading timestamps and wellbeing record ti
   assert.equal(extremes.systolic.min.value,100);assert.equal(extremes.systolic.max.id,1);assert.equal(extremes.systolic.max.measuredAt,'2026-10-02T00:01:00Z');assert.equal(extremes.pulse.max.readingIndex,1);assert.equal(extremes.wellbeing.max.id,2);assert.equal(extremes.wellbeing.min.id,1);
   assert.equal(M.statisticsExtremes([]).pulse.min,null);
 });
-test('statistics comparison uses unrounded averages and leaves missing comparisons unavailable', () => {
+test('statistics comparison preserves raw averages and leaves missing comparisons unavailable', () => {
   const left=[session([reading(120),reading(121)],1)],right=[session([reading(120)],2)];
   assert.equal(M.statisticsComparison(left,right).delta.systolic,-0.5);
   assert.equal(M.statisticsComparison(left,[]).delta,null);assert.equal(M.statisticsComparison(left,left).shared,1);
+});
+test('statistics differences agree with the displayed rounded means', () => {
+  const left=Array.from({length:15},(_,i)=>session([reading(i<11?122:121)],i+1));
+  const right=[session([reading(121),reading(122),reading(122)],100)],before=M.clone({left,right});
+  const result=M.statisticsComparison(left,right);
+  assert.equal(result.left.averages.systolic,M.stats(left).averages.systolic);
+  assert.equal(result.right.averages.systolic,M.stats(right).averages.systolic);
+  assert.equal(result.left.values.systolic,121.7);assert.equal(result.right.values.systolic,121.7);
+  assert.deepEqual(result.delta,{systolic:0,diastolic:0,pulse:0,wellbeing:0});
+  const higher=[session([reading(123),reading(124),reading(124)],101)];
+  const raised=M.statisticsComparison(left,higher),lowered=M.statisticsComparison(higher,left);
+  assert.equal(raised.right.values.systolic,123.7);assert.equal(raised.delta.systolic,2);assert.equal(lowered.delta.systolic,-2);
+  assert.equal(M.statisticsComparison([],higher).delta,null);
+  assert.deepEqual({left,right},before);
+});
+test('comparison medians weight every record once and compare the displayed values',()=>{
+  const r=(systolic,diastolic,pulse)=>({...reading(systolic),diastolic,pulse});
+  const left=[{...session([r(100,50,60),r(101,51,61)],1),wellbeing:2},{...session([r(120,80,90),r(121,81,91)],2),wellbeing:7},{...session([r(200,140,110)],3),wellbeing:10}];
+  const right=[{...session([r(110,60,70),r(111,61,71)],4),wellbeing:4},{...session([r(130,100,110),r(131,101,111)],5),wellbeing:8}],before=M.clone({left,right});
+  const compared=M.statisticsComparison(left,right,'median');
+  assert.equal(compared.left.method,'median');assert.equal(compared.left.count,3);assert.equal(compared.right.count,2);
+  assert.deepEqual(compared.left.values,{systolic:120.5,diastolic:80.5,pulse:90.5,wellbeing:7});
+  assert.deepEqual(compared.right.values,{systolic:120.5,diastolic:80.5,pulse:90.5,wellbeing:6});
+  assert.deepEqual(compared.delta,{systolic:0,diastolic:0,pulse:0,wellbeing:-1});
+  assert.equal(compared.left.averages.systolic,M.stats(left).averages.systolic);
+  assert.notEqual(compared.left.values.systolic,M.statisticsComparison(left,right).left.values.systolic);
+  const single=M.statisticsComparison([session([reading(121),reading(122),reading(122)])],[session([reading(122)],8)],'median');
+  assert.equal(single.left.values.systolic,121.7);assert.equal(single.delta.systolic,0.3);
+  assert.equal(M.statisticsComparison([],right,'median').delta,null);assert.equal(M.statisticsComparison(left,[],'median').delta,null);
+  assert.throws(()=>M.statisticsComparison(left,right,'unknown'));
+  assert.deepEqual({left,right},before);
 });
 test('demo has valid records, readings and non-overlapping periods', () => {
   const state=seed();assert.equal(state.sessions.length,90);

@@ -307,6 +307,7 @@
       selection:selection(saved.selection)||{scope:'time',preset:'7'},
       chartMetric:['systolic','diastolic','pulse','pressure','combined'].includes(saved.chartMetric)?saved.chartMetric:'pressure',
       summary:['mean','median'].includes(saved.summary)?saved.summary:'mean',
+      compareSummary:['mean','median'].includes(saved.compareSummary)?saved.compareSummary:'mean',
       compareType:saved.compareType==='dates'?'dates':'phases',
       left:phaseId(saved.left),right:phaseId(saved.right),
       leftDates:dates(saved.leftDates),rightDates:dates(saved.rightDates),
@@ -347,9 +348,12 @@
     }));
     return result;
   }
-  function statisticsComparison(left,right) {
-    const a=stats(left),b=stats(right),ids=new Set(left.map(s=>s.id));
-    return {left:a,right:b,shared:right.filter(s=>ids.has(s.id)).length,delta:a.count&&b.count?Object.fromEntries(Object.keys(a.averages).map(key=>[key,Math.round((b.averages[key]-a.averages[key])*10)/10])):null};
+  function statisticsComparison(left,right,method='mean') {
+    const a={...stats(left),...statisticsSummary(left,method)},b={...stats(right),...statisticsSummary(right,method)},ids=new Set(left.map(s=>s.id));
+    const tenths=s=>Object.fromEntries(Object.entries(s.values).map(([key,value])=>[key,Math.round(value*10)])),first=tenths(a),second=tenths(b);
+    a.values=Object.fromEntries(Object.entries(first).map(([key,value])=>[key,value/10]));
+    b.values=Object.fromEntries(Object.entries(second).map(([key,value])=>[key,value/10]));
+    return {left:a,right:b,shared:right.filter(s=>ids.has(s.id)).length,delta:a.count&&b.count?Object.fromEntries(Object.keys(first).map(key=>[key,(second[key]-first[key])/10])):null};
   }
   function backup(state) {
     return { app:'Давление',version:2,exportedAt:new Date().toISOString(),

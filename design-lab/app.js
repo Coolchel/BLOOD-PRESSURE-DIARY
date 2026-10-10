@@ -21,6 +21,7 @@
     chevronDown:'M6 9l6 6 6-6',
     compare:'M4 7h16M16 3l4 4-4 4M20 17H4M8 13l-4 4 4 4',
     calendarClock:'M10 21H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M7 2v4M15 2v4M3 9h16M22 17a5 5 0 1 0-10 0 5 5 0 0 0 10 0M17 14v3l2 1',
+    calendarRange:'M8 2.5v4M16 2.5v4M6 4.5h12a3 3 0 0 1 3 3V18a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7.5a3 3 0 0 1 3-3zM3 10h18M7.5 14h9M7.5 17.5h5',
     compareBars:'M5 20V10h5v10M14 20V4h5v16M3 20h18',
     pill:'M9 3a5 5 0 0 1 7 7l-6 6a5 5 0 0 1-7-7l6-6zM6 6l7 7',
     moon:'M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11z',
@@ -259,7 +260,6 @@
 
   const statisticsMetrics=[['systolic','Верхнее','мм рт. ст.'],['diastolic','Нижнее','мм рт. ст.'],['pulse','Пульс','уд/мин'],['wellbeing','Самочувствие','из 10']];
   const statisticsPresets=[['7','7 дней'],['30','30 дней'],['90','90 дней'],['all','Всё']];
-  const measuredDays=n=>n+' '+(n%100>=11&&n%100<=14?'дней':n%10===1?'день':n%10>=2&&n%10<=4?'дня':'дней')+' с измерениями';
   function statisticsWindow(selection=ui.statistics.selection){return M.statisticsWindow(state.sessions,state.phases,selection);}
   function statisticsTitle(selection){
     if(selection.scope!=='time')return state.phases.find(p=>String(p.id)===String(selection.scope))?.title||'Выберите период';
@@ -319,24 +319,51 @@
       s.rightDates={scope:'time',preset:'custom',from:local(current.from).slice(0,10),to:local(current.until-1).slice(0,10)};
     }
   }
+  function statisticsComparisonDates(w){
+    if(w.from===null)return '<span class="statistics-comparison-selection-dates statistics-comparison-no-dates">Нет измерений</span>';
+    const dateValue=value=>`<time datetime="${local(value).slice(0,10)}"><strong>${esc(date(value))}</strong><span>${new Date(value).getFullYear()}</span></time>`;
+    const open=w.phase&&!w.phase.endedAt,scheduled=open&&M.phaseStatus(w.phase)==='scheduled';
+    return `<span class="statistics-comparison-selection-dates"><span><small>С</small>${dateValue(w.from)}</span><span><small>По</small>${open?`<strong>${scheduled?'Без даты':'Сейчас'}</strong>`:dateValue(w.until-1)}</span>${scheduled?'<small class="statistics-comparison-scheduled">Запланирован</small>':''}</span>`;
+  }
   function statisticsComparisonView(){
     ensureStatisticsComparison();const s=ui.statistics;
-    const switcher=`<div class="segmented statistics-compare-type" aria-label="Что сравниваем">${[['phases','Периоды'],['dates','Диапазоны дат']].map(([value,label])=>`<button data-action="statistics-compare-type" data-value="${value}" class="${s.compareType===value?'active':''}" aria-pressed="${s.compareType===value}">${label}</button>`).join('')}</div>`;
+    const switcher=`<div class="statistics-scope-tabs statistics-compare-type" aria-label="Что сравниваем">${[['dates','Даты','calendarRange'],['phases','Периоды','layers']].map(([value,label,icon])=>`<button data-action="statistics-compare-type" data-value="${value}" class="${s.compareType===value?'active':''}" aria-pressed="${s.compareType===value}">${I(icon)}<span class="statistics-scope-label">${label}</span></button>`).join('')}</div>`;
     if(s.compareType==='phases'&&state.phases.length<2)return switcher+`<div class="statistics-empty">${I('layers')}<strong>Нужны два периода</strong><p>Создайте ещё один период или сравните два диапазона дат.</p><button class="secondary" data-action="statistics-compare-type" data-value="dates">Сравнить даты</button></div>`;
     const leftSelection=s.compareType==='phases'?{scope:s.left}:s.leftDates,rightSelection=s.compareType==='phases'?{scope:s.right}:s.rightDates;
-    const left=statisticsWindow(leftSelection),right=statisticsWindow(rightSelection),comparison=M.statisticsComparison(left.items,right.items);
-    const selection=`<div class="statistics-comparison-selectors"><div><span class="statistics-side-label">Первый</span>${statisticsRangeButton(leftSelection,'left')}</div><div><span class="statistics-side-label">Второй</span>${statisticsRangeButton(rightSelection,'right')}</div></div>`;
-    const values=`<section class="statistics-section"><h2 class="section-title">Средние и разница</h2><div class="card statistics-comparison"><div class="statistics-comparison-head"><span>Показатель</span><span>Первый</span><span>Второй</span></div>${statisticsMetrics.map(([key,label,unit])=>{const a=comparison.left,b=comparison.right,delta=comparison.delta?.[key];return `<div class="statistics-comparison-row" data-metric="${key}"><span>${label}<small>${unit}</small></span><strong>${a.count?num(a.averages[key],1):'—'}</strong><strong>${b.count?num(b.averages[key],1):'—'}</strong>${delta!==undefined?`<small class="statistics-comparison-delta">${delta===0?'Без изменений':(delta>0?'+':'−')+num(Math.abs(delta),1)+' '+(key==='wellbeing'?'балла':unit)}</small>`:''}</div>`;}).join('')}</div></section>`;
-    return switcher+selection+`<div class="statistics-comparison-counts"><span>${recs(left.items.length)} · ${measuredDays(left.days)}</span><span>${recs(right.items.length)} · ${measuredDays(right.days)}</span></div>`+(s.compareType==='phases'&&s.left===s.right?'<p class="statistics-notice">Выбран один и тот же период. Выберите другой для сравнения.</p>':comparison.shared?`<p class="statistics-notice">${I('layers')}Общих записей: ${comparison.shared}. Они учитываются в обеих выборках.</p>`:'')+values+'<p class="statistics-caption">Разница рассчитана по неокруглённым средним.</p>'+(!comparison.delta?'<p class="statistics-caption">Разница появится, когда в обеих выборках будут измерения.</p>':'')+`<div class="statistics-comparison-history"><button class="secondary" data-action="statistics-history" data-target="left">${I('history')}История первого</button><button class="secondary" data-action="statistics-history" data-target="right">${I('history')}История второго</button></div>`;
+    const left=statisticsWindow(leftSelection),right=statisticsWindow(rightSelection),comparison=M.statisticsComparison(left.items,right.items,s.compareSummary);
+    const selection=`<div class="statistics-comparison-selectors">${[[leftSelection,left,'left',1],[rightSelection,right,'right',2]].map(([selected,w,target,number])=>{
+      const appearance=w.phase?kind(w.phase):null,title=w.phase?w.phase.title:selected.preset==='custom'?'Свои даты':selected.preset==='all'?'Всё время':selected.preset+' дней';
+      return `<button class="statistics-comparison-selection" data-action="statistics-range" data-target="${target}" aria-label="Изменить ${target==='left'?'первый':'второй'} ${w.phase?'период':'диапазон'}: ${esc(statisticsTitle(selected))}, ${esc(statisticsDates(w))}"><span class="statistics-comparison-number" aria-hidden="true">${number}</span><span class="statistics-comparison-selection-title"><span class="statistics-range-icon" ${appearance?`style="color:${appearance.color}"`:''}>${I(appearance?.icon||'calendarRange')}</span><strong>${esc(title)}</strong></span>${statisticsComparisonDates(w)}<span class="statistics-comparison-count">${recs(w.items.length)}</span></button>`;
+    }).join('')}</div>`;
+    const methodLabel=s.compareSummary==='median'?'Медиана':'Среднее';
+    const methodPicker=`<div class="statistics-comparison-method-picker"><button class="statistics-comparison-method" data-action="statistics-comparison-method" aria-label="Способ сравнения: ${methodLabel}" aria-haspopup="listbox" aria-expanded="false" aria-controls="statistics-comparison-method-options"><span>${methodLabel}</span>${I('chevronDown')}</button><div id="statistics-comparison-method-options" class="statistics-comparison-method-options" role="listbox" aria-label="Способ расчёта сравнения" hidden>${[['mean','Среднее'],['median','Медиана']].map(([value,label])=>`<button role="option" aria-selected="${s.compareSummary===value}" tabindex="-1" data-action="statistics-comparison-summary" data-value="${value}"><span>${label}</span>${I('check')}</button>`).join('')}</div></div>`;
+    const values=`<section class="statistics-section"><div class="statistics-comparison-heading"><h2 class="section-title">${s.compareSummary==='median'?'Медианы':'Средние'} и разница</h2>${methodPicker}</div><div class="statistics-comparison"><div class="statistics-comparison-head"><span>Показатель</span><span>Первый</span><span>Второй</span></div>${statisticsMetrics.map(([key,label,unit])=>{const a=comparison.left,b=comparison.right,delta=comparison.delta?.[key];return `<div class="statistics-comparison-row" data-metric="${key}"><span>${label}<small>${unit}</small></span><strong>${a.count?num(a.values[key],1):'—'}</strong><strong>${b.count?num(b.values[key],1):'—'}</strong><small class="statistics-comparison-delta">Разница: ${delta===undefined?'—':num(Math.abs(delta),1)+' ед.'}</small></div>`;}).join('')}</div></section>`;
+    const history=[[left,'left','первого'],[right,'right','второго']].filter(([w])=>w.items.length).map(([,target,label])=>`<button class="secondary" data-action="statistics-history" data-target="${target}">${I('history')}История ${label}</button>`).join('');
+    return switcher+selection+values+(history?`<div class="statistics-comparison-history">${history}</div>`:'');
   }
   function clarityStatistics(){
     const s=ui.statistics;
     if(s.selection.scope!=='time'&&!state.phases.some(p=>String(p.id)===s.selection.scope))s.selection={scope:'time',preset:'7'};
-    if(s.tab==='comparison')return `<div class="clarity-statistics">${statisticsComparisonView()}</div>`;
+    if(s.tab==='comparison')return `<div class="clarity-statistics statistics-comparison-view">${statisticsComparisonView()}</div>`;
     const w=statisticsWindow(),average=M.statisticsSummary(w.items,s.summary);
     return `<div class="clarity-statistics statistics-overview"><section class="statistics-section"><h2 class="section-title">${s.summary==='median'?'Медиана':'Среднее'} за период</h2>${statisticsAverages(average)}</section>${w.items.length?statisticsChart(w)+`<section class="statistics-section"><h2 class="section-title">Минимум и максимум</h2>${statisticsExtremeRows(w.items)}</section>`:`<div class="statistics-empty">${I('chart')}<strong>${state.sessions.length?'Нет измерений в этом интервале':'Статистика появится после измерений'}</strong><p>${state.sessions.length?'Выберите другие даты или период.':'Добавьте первую запись в дневник.'}</p><button class="secondary" data-action="${state.sessions.length?'statistics-preset':'new'}" ${state.sessions.length?'data-value="all"':''}>${state.sessions.length?'Показать всё':'Новое измерение'}</button></div>`}<div class="statistics-links"><button data-action="statistics-history" data-target="overview">${I('history')}<span>История измерений</span>${I('chevron')}</button></div></div>`;
   }
   function renderStatistics(){const scroll=$('app-content').scrollTop;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=scroll;}
+  function closeStatisticsComparisonMethod(restoreFocus=false){
+    const picker=phone.querySelector('.statistics-comparison-method-picker'),options=picker?.querySelector('[role="listbox"]');
+    if(!options||options.hidden)return false;
+    const trigger=picker.querySelector('.statistics-comparison-method'),focused=options.contains(document.activeElement);
+    options.hidden=true;trigger.setAttribute('aria-expanded','false');
+    if(restoreFocus||focused)trigger.focus({preventScroll:true});
+    return true;
+  }
+  function toggleStatisticsComparisonMethod(){
+    const picker=phone.querySelector('.statistics-comparison-method-picker'),options=picker?.querySelector('[role="listbox"]');
+    if(!options)return;
+    if(!options.hidden){closeStatisticsComparisonMethod(true);return;}
+    options.hidden=false;picker.querySelector('.statistics-comparison-method').setAttribute('aria-expanded','true');
+    options.querySelector('[aria-selected="true"]').focus({preventScroll:true});
+  }
   function statisticsSettingsModal(){
     modal={type:'statistics-settings',metric:ui.statistics.chartMetric};renderStatisticsSettingsModal();
   }
@@ -417,6 +444,7 @@
       showModal('',body,'<div class="statistics-range-preview" aria-live="polite"><strong></strong></div><div class="error-box" role="alert"></div><button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="statistics-range-apply">Применить</button>');
       sheet=$('modal').querySelector('.sheet');sheet.classList.add('statistics-range-sheet');
     }else sheet.classList.add('is-selecting');
+    sheet.classList.toggle('statistics-comparison-range-sheet',!isOverview);
     $('sheet-title').textContent=isOverview?'Даты и периоды':'Выбор '+(modal.target==='left'?'первого':'второго')+' '+(isTime?'диапазона':'периода');
     sheet.querySelectorAll('[data-action="statistics-range-scope"]').forEach(button=>{
       const selected=(button.dataset.value==='time')===isTime;
@@ -924,6 +952,7 @@
   });
   document.addEventListener('focusout',event=>{
     if(ui.view==='entry'&&event.target.matches('.metric-field input'))updateEntryFeedback(null);
+    if(event.target.closest('.statistics-comparison-method-picker')&&!event.relatedTarget?.closest('.statistics-comparison-method-picker'))closeStatisticsComparisonMethod();
   });
   document.addEventListener('change',event=>{const target=event.target;if(theme==='clarity'&&modal?.type==='filters'&&target.closest('.history-filter-form')){readHistoryFilterFields();if(target.id==='filter-from'||target.id==='filter-to')modal.filters.interval=modal.filters.from||modal.filters.to?'custom':'all';updateHistoryFilterPreview();return;}if(target.dataset.change==='compare-baseline'){ui.compareBase=target.value;render();return;}if(target.dataset.change==='scope'){ui.scope=target.value;ui.chartSelection={};render();}if(modal?.type==='phase'&&target.id==='phase-open'){$('modal').querySelector('[data-action="phase-datetime"][data-field="end"]').disabled=target.checked;updatePhaseFeedback();}});
   function action(target){
@@ -938,6 +967,8 @@
       case 'statistics-tab':ui.statistics.tab=target.dataset.value;ui.statistics.restoreScroll=false;render();$('app-content').scrollTop=0;break;
       case 'statistics-preset':ui.statistics.selection={scope:'time',preset:target.dataset.value};persistStatisticsPreferences();ui.statistics.restoreScroll=false;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=0;break;
       case 'statistics-summary':ui.statistics.summary=target.dataset.value;persistStatisticsPreferences();renderStatistics();break;
+      case 'statistics-comparison-method':toggleStatisticsComparisonMethod();break;
+      case 'statistics-comparison-summary':ui.statistics.compareSummary=target.dataset.value;persistStatisticsPreferences();renderStatistics();phone.querySelector('.statistics-comparison-method')?.focus({preventScroll:true});break;
       case 'statistics-settings':statisticsSettingsModal();break;
       case 'statistics-settings-apply':ui.statistics.chartMetric=modal.metric;closeModal();persistStatisticsPreferences();renderStatistics();break;
       case 'statistics-metric':modal.metric=target.dataset.value;renderStatisticsSettingsModal();break;
@@ -1055,10 +1086,20 @@
       case 'about':modal={type:'about'};showModal(concept.name,`<p>${concept.description}</p><p><strong>Все функции:</strong> одиночный замер и серия 2–10; время каждого замера; самочувствие 1–10; 16 отметок; заметки; история с 8 сортировками и датами; три графика; интервалы 7/30/90 дней и все записи; периоды, их редактирование, удаление и сравнение; Excel и JSON; восстановление и автокопии.</p><p>Это рабочий веб-аналог. Данные сохраняются в браузере отдельно от мобильного приложения. Тактильный отклик и системное меню «Поделиться» заменены браузерными действиями скачивания.</p>`,`<button class="measure-cta" data-action="close-modal">Понятно</button>`);break;
     }
   }
-  document.addEventListener('click',event=>{if(modal?.type==='filters'&&theme==='clarity'&&!event.target.closest('.history-select,.history-filter-dates,.history-calendar-panel'))closeHistoryFilterPopovers();const target=event.target.closest('[data-action]');if(target)action(target);else if(event.target===$('modal'))closeModal();});
+  document.addEventListener('click',event=>{if(!event.target.closest('.statistics-comparison-method-picker'))closeStatisticsComparisonMethod();if(modal?.type==='filters'&&theme==='clarity'&&!event.target.closest('.history-select,.history-filter-dates,.history-calendar-panel'))closeHistoryFilterPopovers();const target=event.target.closest('[data-action]');if(target)action(target);else if(event.target===$('modal'))closeModal();});
   document.addEventListener('pointerdown',()=>{document.body.dataset.inputMode='pointer';});
   document.addEventListener('keydown',()=>{document.body.dataset.inputMode='keyboard';});
   document.addEventListener('keydown',event=>{
+    const comparisonPicker=event.target.closest('.statistics-comparison-method-picker');
+    if(comparisonPicker){
+      if(event.key==='Escape'&&closeStatisticsComparisonMethod(true)){event.preventDefault();return;}
+      if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){
+        event.preventDefault();const options=comparisonPicker.querySelector('[role="listbox"]');
+        if(options.hidden){toggleStatisticsComparisonMethod();return;}
+        const buttons=[...options.querySelectorAll('[role="option"]')],index=buttons.indexOf(event.target),next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length;
+        buttons[next].focus();return;
+      }
+    }
     if(event.key==='Escape'&&modal){if(!closeHistoryFilterPopovers(true))closeModal();return;}
     if(modal?.type==='filters'&&theme==='clarity'&&['ArrowDown','ArrowUp','Home','End'].includes(event.key)){
       const trigger=event.target.closest('.history-select-trigger'),list=event.target.closest('.history-select-options');
