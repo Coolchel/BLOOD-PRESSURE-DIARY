@@ -290,6 +290,28 @@
     const items=sessions.filter(s=>Date.parse(s.measuredAt)>=from&&Date.parse(s.measuredAt)<until).sort((a,b)=>Date.parse(b.measuredAt)-Date.parse(a.measuredAt)||b.id-a.id);
     return {items,phase:null,from,until,previous:{from:+priorStart,until:from,items:sessions.filter(s=>Date.parse(s.measuredAt)>=+priorStart&&Date.parse(s.measuredAt)<from)},days:new Set(items.map(s=>localDay(s.measuredAt))).size};
   }
+  function statisticsPreferences(value,phases=[]) {
+    const saved=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
+    const selection=input=>{
+      if(!input||typeof input!=='object'||Array.isArray(input))return null;
+      if(input.scope!==undefined&&typeof input.scope!=='string'&&!Number.isSafeInteger(input.scope))return null;
+      if(input.preset!==undefined&&typeof input.preset!=='string'&&!Number.isSafeInteger(input.preset))return null;
+      const scope=String(input.scope??'time'),preset=String(input.preset??'7');
+      if(preset==='custom'&&(typeof input.from!=='string'||typeof input.to!=='string'))return null;
+      const result=scope==='time'?{scope,preset,...(preset==='custom'?{from:input.from,to:input.to}:{})}:{scope};
+      try{statisticsWindow([],phases,result);return result;}catch{return null;}
+    };
+    const dates=input=>input?.scope==='time'?selection(input):null;
+    const phaseId=id=>(typeof id==='string'||Number.isSafeInteger(id))&&phases.some(p=>String(p.id)===String(id))?String(id):null;
+    return {
+      selection:selection(saved.selection)||{scope:'time',preset:'7'},
+      chartMetric:['systolic','diastolic','pulse','pressure','combined'].includes(saved.chartMetric)?saved.chartMetric:'pressure',
+      summary:['mean','median'].includes(saved.summary)?saved.summary:'mean',
+      compareType:saved.compareType==='dates'?'dates':'phases',
+      left:phaseId(saved.left),right:phaseId(saved.right),
+      leftDates:dates(saved.leftDates),rightDates:dates(saved.rightDates),
+    };
+  }
   function nextDay(value) { const d=new Date(value);d.setDate(d.getDate()+1);return d; }
   function statisticsChartPoints(sessions,aggregation='records') {
     const ordered=sessions.slice().sort((a,b)=>Date.parse(a.measuredAt)-Date.parse(b.measuredAt)||a.id-b.id);
@@ -386,5 +408,5 @@
     next.copies=[{ date,at:stamp,payload:backup(next) },...(next.copies||[]).filter(c=>c.date!==date)].slice(0,7);
     return next;
   }
-  return { DAY,MAX_SERIES_READINGS,MAX_CONCURRENT_PHASES,TAGS,KINDS,PHASE_ICONS,PHASE_COLORS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,statisticsSummary,inside,phaseFor,phasesFor,phaseAppearance,phaseStatus,phaseLimitConflict,historyInterval,filter,ranges,savePhase,finishPhase,baseline,chartPoints,statisticsWindow,statisticsChartPoints,statisticsExtremes,statisticsComparison,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
+  return { DAY,MAX_SERIES_READINGS,MAX_CONCURRENT_PHASES,TAGS,KINDS,PHASE_ICONS,PHASE_COLORS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,statisticsSummary,inside,phaseFor,phasesFor,phaseAppearance,phaseStatus,phaseLimitConflict,historyInterval,filter,ranges,savePhase,finishPhase,baseline,chartPoints,statisticsWindow,statisticsPreferences,statisticsChartPoints,statisticsExtremes,statisticsComparison,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
 });

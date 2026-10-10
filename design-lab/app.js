@@ -3,6 +3,7 @@
   const M=window.DiaryModel;
   const theme=document.body.dataset.theme;
   const key='pressure-design-lab-v1-'+theme;
+  const statisticsKey=key+'-statistics';
   const concepts={
     calm:{name:'Тихий ритм',number:'01',description:'Сдержанный зелёный, ясная иерархия и воздух между блоками. Последний замер — главный. Остальные показатели поддерживают его.',tags:['Спокойная палитра','Ясная иерархия','Модульные карточки'],home:'Давление'},
     coral:{name:'Коралл',number:'02',description:'Знакомый коралловый характер, переосмысленный в тёплых оттенках. Выразительные цифры, мягкие карточки и компактная навигация.',tags:['Тёплые оттенки','Мягкие формы','Карточки показателей'],home:'Мой дневник'},
@@ -60,7 +61,11 @@
     else {state=M.seed();storageError='Не удалось прочитать сохранённый дневник. Используются тестовые данные; исходное хранилище не перезаписывается.';}
   }
   const defaultHistoryFilters=()=>({sort:'newest',from:'',to:'',interval:'all',mode:'all',phaseId:'all',wellbeingMin:'',wellbeingMax:'',tags:[],withNote:false});
-  const ui={view:'home',id:null,detailReturn:'history',period:'7',scope:'time',metric:'pressure',filters:defaultHistoryFilters(),phaseHistory:false,statisticsHistory:false,statistics:{tab:'overview',selection:{scope:'time',preset:'7'},chartMetric:'pressure',summary:'mean',detailScroll:0,restoreScroll:false,compareType:'phases',left:null,right:null,leftDates:null,rightDates:null},limit:30,entry:null,error:'',readingValidation:false,chartSelection:{},phaseGroups:{},phaseGroupMode:null,undo:null};
+  function loadStatisticsPreferences(){
+    try{const saved=JSON.parse(localStorage.getItem(statisticsKey));return M.statisticsPreferences(saved?.version===1?saved:null,state.phases);}
+    catch{return M.statisticsPreferences(null,state.phases);}
+  }
+  const ui={view:'home',id:null,detailReturn:'history',period:'7',scope:'time',metric:'pressure',filters:defaultHistoryFilters(),phaseHistory:false,statisticsHistory:false,statistics:{tab:'overview',...loadStatisticsPreferences(),detailScroll:0,restoreScroll:false},limit:30,entry:null,error:'',readingValidation:false,chartSelection:{},phaseGroups:{},phaseGroupMode:null,undo:null};
   let modal=null,toastTimer,saveAnimationTimer,focusBeforeModal;
   document.body.classList.add('theme-'+theme);
   const params=new URLSearchParams(location.search);
@@ -117,6 +122,10 @@
     $('toast').innerHTML=`<span>${esc(message)}</span>${undo?'<button data-action="undo">Отменить</button>':''}<span class="toast-countdown" aria-hidden="true"></span>`;
     $('toast').hidden=false;
     toastTimer=setTimeout(()=>$('toast').hidden=true,7000);
+  }
+  function persistStatisticsPreferences(){
+    try{localStorage.setItem(statisticsKey,JSON.stringify({version:1,...M.statisticsPreferences(ui.statistics,state.phases)}));}
+    catch{toast('Не удалось сохранить настройки статистики.');}
   }
   function mutation(next,message){const previous=M.clone(state);if(persist(next)){ui.undo=previous;toast(message,true);return true;}return false;}
   function clearPhaseHistory(){
@@ -348,40 +357,48 @@
   function statisticsRangeModal(target){
     ensureStatisticsComparison();const s=ui.statistics;
     const selection=target==='overview'?s.selection:s.compareType==='phases'?{scope:target==='left'?s.left:s.right}:target==='left'?s.leftDates:s.rightDates;
-    modal={type:'statistics-range',target,selection:M.clone(selection),calendar:null,wheelTimers:{}};
-    if(selection.scope==='time'&&selection.preset==='custom')setStatisticsCalendar('from');
+    modal={type:'statistics-range',target,selection:M.clone(selection),calendar:null,rangeAnchor:null,timeSelection:M.clone(selection.scope==='time'?selection:{scope:'time',preset:'7'}),phaseSelection:M.clone(selection.scope!=='time'?selection:{scope:String(state.phases[0]?.id)})};
+    if(selection.scope==='time')setStatisticsCalendar('to');
     renderStatisticsRangeModal();
   }
+  function statisticsRangeDates(){
+    const f=modal.selection;
+    if(f.preset==='custom')return {from:f.from,to:f.to};
+    const w=statisticsWindow(f);
+    return {from:w.from===null?'':local(w.from).slice(0,10),to:w.until===null?'':local(w.until-1).slice(0,10)};
+  }
   function setStatisticsCalendar(field){
-    const value=modal.selection[field]||local(Date.now()).slice(0,10),d=new Date(value+'T12:00');
+    const value=statisticsRangeDates()[field]||local(Date.now()).slice(0,10),d=new Date(value+'T12:00');
     modal.calendar={field,day:value,month:new Date(d.getFullYear(),d.getMonth(),1)};
   }
-  function statisticsWheelOptions(){
-    return modal.selection.scope==='time'?[...statisticsPresets,['custom','Свои даты']].map(([value,label])=>({value,label:value==='all'?'Все записи':['7','30','90'].includes(value)?'Последние '+value+' дней':label})):state.phases.map(p=>({value:String(p.id),label:p.title,appearance:kind(p)}));
+  function acceptStatisticsRangeDate(value){
+    const anchor=modal.rangeAnchor,[from,to]=[anchor||value,value].sort();
+    modal.selection={scope:'time',preset:'custom',from,to};
+    modal.rangeAnchor=anchor?null:value;
+    const day=new Date(value+'T12:00');
+    modal.calendar={field:value===from?'from':'to',day:value,month:new Date(day.getFullYear(),day.getMonth(),1)};
+    renderStatisticsRangeModal();
   }
-  function selectStatisticsWheel(index,redraw=true,alignWheel=true){
-    if(modal?.type!=='statistics-range')return;
-    const options=statisticsWheelOptions(),selectedIndex=Math.max(0,Math.min(options.length-1,index)),option=options[selectedIndex];if(!option)return;
-    const f=modal.selection;
-    if(option.value===(f.scope==='time'?f.preset:f.scope)){
-      if(alignWheel)$('modal').querySelector('.statistics-wheel').scrollTop=selectedIndex*48;
-      return;
-    }
-    modal.calendar=null;
-    if(f.scope==='time'){
-      f.preset=option.value;
-      if(f.preset==='custom'){
-        if(!f.from||!f.to){const w=statisticsWindow({scope:'time',preset:'7'});f.from=local(w.from).slice(0,10);f.to=local(w.until-1).slice(0,10);}
-        setStatisticsCalendar('from');
-      }
-    }else modal.selection={scope:option.value};
-    if(redraw)renderStatisticsRangeModal(alignWheel);
+  function switchStatisticsRangeScope(scope){
+    const isTime=modal.selection.scope==='time';
+    if((scope==='time')===isTime||scope!=='time'&&!state.phases.length)return;
+    modal[isTime?'timeSelection':'phaseSelection']=M.clone(modal.selection);
+    modal.selection=M.clone(modal[scope==='time'?'timeSelection':'phaseSelection']);modal.calendar=null;
+    if(scope==='time')setStatisticsCalendar('to');
+    renderStatisticsRangeModal();
+  }
+  function statisticsRangePeriodsMarkup(){
+    const sorted=state.phases.slice().sort((a,b)=>Date.parse(b.startedAt)-Date.parse(a.startedAt)||b.id-a.id);
+    return [[false,'Активные'],[true,'Завершённые']].map(([finished,label])=>{
+      const phases=sorted.filter(p=>(M.phaseStatus(p)==='finished')===finished);
+      return phases.length?`<section class="statistics-period-group"><h3>${label}</h3>${phases.map(p=>`<button class="statistics-range-period" data-action="statistics-range-period" data-value="${p.id}" aria-pressed="false"><span class="statistics-period-icon" style="color:${kind(p).color}">${I(kind(p).icon)}</span><span class="grow"><strong>${esc(p.title)}</strong><small>${M.phaseStatus(p)==='scheduled'?'Запланирован · ':''}${esc(range(p))}</small></span><span class="statistics-period-check" aria-hidden="true">${I('check')}</span></button>`).join('')}</section>`:'';
+    }).join('');
   }
   function updateStatisticsCalendar(){
-    const calendar=modal.calendar,f=modal.selection,mount=$('statistics-calendar');
+    const calendar=modal.calendar,f=statisticsRangeDates(),mount=$('statistics-calendar');
     const monthKey=calendar.month.getFullYear()+'-'+calendar.month.getMonth();
     if(mount.dataset.month!==monthKey){
-      mount.innerHTML=calendarMarkup({...calendar,rangeFrom:f.from,rangeTo:f.to});mount.dataset.month=monthKey;
+      mount.innerHTML=calendarMarkup({...calendar,rangeFrom:f.from,rangeTo:f.to,highlightToday:false});mount.dataset.month=monthKey;
     }else mount.querySelectorAll('.calendar-day').forEach(button=>{
       const value=button.dataset.value,selected=value===calendar.day;
       button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));
@@ -389,16 +406,15 @@
       button.classList.toggle('range-edge',value===f.from||value===f.to);
     });
   }
-  function renderStatisticsRangeModal(alignWheel=true){
-    clearTimeout(modal.wheelTimers.interval);
-    const f=modal.selection,isOverview=modal.target==='overview',isTime=f.scope==='time',options=statisticsWheelOptions(),index=Math.max(0,options.findIndex(o=>o.value===(isTime?f.preset:f.scope)));
+  function renderStatisticsRangeModal(){
+    const f=modal.selection,isOverview=modal.target==='overview',isTime=f.scope==='time';
     let error='',w=null;try{w=statisticsWindow(f);}catch(e){error=e.message;}
     let sheet=$('modal').querySelector('.statistics-range-sheet');
     const mounted=!sheet;
     if(mounted){
-      const mode=isOverview?`<div class="segmented statistics-scope-tabs"><button data-action="statistics-range-scope" data-value="time">Даты</button><button data-action="statistics-range-scope" data-value="phase" ${state.phases.length?'':'disabled'}>Периоды</button></div>`:'';
-      const body=mode+`<div class="statistics-wheel-frame"><div class="statistics-wheel" role="listbox" tabindex="0"></div></div><div class="statistics-custom-range" hidden><div class="statistics-date-fields">${[['from','Начало'],['to','Завершение']].map(([field,label])=>`<button class="statistics-date-card" data-action="statistics-date" data-field="${field}" aria-label="${label} диапазона">${I('calendar')}<span>${label}</span><strong></strong></button>`).join('')}</div><div id="statistics-calendar" class="statistics-calendar"></div></div><div class="statistics-range-preview"><span></span><strong></strong></div><div class="error-box" role="alert"></div>`;
-      showModal('',body,'<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="statistics-range-apply">Применить</button>');
+      const mode=isOverview?`<div class="statistics-scope-tabs" aria-label="Выбор дат или периода"><button data-action="statistics-range-scope" data-value="time">${I('calendar')}<span class="statistics-scope-label">Даты</span></button><button data-action="statistics-range-scope" data-value="phase" ${state.phases.length?'':'disabled'}>${I('layers')}<span class="statistics-scope-label">Периоды</span></button></div>`:'';
+      const body=mode+`<div class="statistics-date-panel"><div class="statistics-range-presets" aria-label="Быстрый интервал">${statisticsPresets.map(([value,label])=>`<button data-action="statistics-range-preset" data-value="${value}" aria-pressed="false">${label}</button>`).join('')}</div><div class="statistics-date-fields">${[['from','Начало'],['to','Завершение']].map(([field,label])=>`<button class="statistics-date-card" data-action="statistics-date" data-field="${field}" aria-label="${label} диапазона"><span>${label}</span><strong></strong></button>`).join('')}</div><div id="statistics-calendar" class="statistics-calendar"></div></div><div class="statistics-period-list" aria-label="Периоды наблюдения" hidden>${statisticsRangePeriodsMarkup()}</div>`;
+      showModal('',body,'<div class="statistics-range-preview" aria-live="polite"><strong></strong></div><div class="error-box" role="alert"></div><button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="statistics-range-apply">Применить</button>');
       sheet=$('modal').querySelector('.sheet');sheet.classList.add('statistics-range-sheet');
     }else sheet.classList.add('is-selecting');
     $('sheet-title').textContent=isOverview?'Даты и периоды':'Выбор '+(modal.target==='left'?'первого':'второго')+' '+(isTime?'диапазона':'периода');
@@ -406,42 +422,29 @@
       const selected=(button.dataset.value==='time')===isTime;
       button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
     });
-    const wheel=sheet.querySelector('.statistics-wheel'),scope=isTime?'time':'phase',custom=isTime&&f.preset==='custom';
-    sheet.classList.toggle('custom-range',custom);
-    sheet.querySelector('.statistics-custom-range').hidden=!custom;
-    wheel.setAttribute('aria-label',isTime?'Интервал статистики':'Период наблюдения');
-    if(modal.wheelScope!==scope){
-      wheel.innerHTML=options.map((o,i)=>`<button role="option" aria-selected="false" data-action="statistics-wheel" data-index="${i}">${o.appearance?`<span style="color:${o.appearance.color}">${I(o.appearance.icon)}</span>`:''}<span>${esc(o.label)}</span></button>`).join('');
-      modal.wheelScope=scope;
-    }
-    wheel.querySelectorAll('button').forEach((button,i)=>{
-      button.classList.toggle('selected',i===index);button.setAttribute('aria-selected',String(i===index));
+    sheet.querySelector('.statistics-date-panel').hidden=!isTime;
+    sheet.querySelector('.statistics-period-list').hidden=isTime;
+    sheet.querySelectorAll('[data-action="statistics-range-preset"]').forEach(button=>{
+      const selected=isTime&&button.dataset.value===f.preset;
+      button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
     });
-    if(alignWheel)wheel.scrollTop=index*48;
-    if(custom){
+    sheet.querySelectorAll('[data-action="statistics-range-period"]').forEach(button=>{
+      const selected=!isTime&&button.dataset.value===f.scope;
+      button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
+    });
+    if(isTime){
+      const dates=statisticsRangeDates();
       sheet.querySelectorAll('[data-action="statistics-date"]').forEach(button=>{
         const field=button.dataset.field,selected=modal.calendar?.field===field;
-        button.classList.toggle('active',selected);button.setAttribute('aria-expanded',String(selected));
-        button.querySelector('strong').textContent=f[field]?date(f[field]+'T12:00',{day:'numeric',month:'short',year:'numeric'}):'Выбрать';
+        const value=dates[field]?date(dates[field]+'T12:00',{day:'numeric',month:'short',year:'numeric'}):'Нет записей';
+        button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
+        button.querySelector('strong').textContent=value;button.setAttribute('aria-label',(field==='from'?'Начало':'Завершение')+' диапазона: '+value);
       });
       if(modal.calendar)updateStatisticsCalendar();
     }
     const preview=sheet.querySelector('.statistics-range-preview');
-    preview.hidden=!w;preview.querySelector('span').textContent=w?statisticsDates(w):'';preview.querySelector('strong').textContent=w?recs(w.items.length):'';
+    preview.querySelector('strong').textContent=w?recs(w.items.length):'—';
     sheet.querySelector('.error-box').textContent=error;sheet.querySelector('[data-action="statistics-range-apply"]').disabled=!!error;
-    if(mounted){
-      wheel.addEventListener('scroll',()=>{
-        if(modal?.type!=='statistics-range'||!wheel.isConnected)return;
-        clearTimeout(modal.wheelTimers.interval);
-        modal.wheelTimers.interval=setTimeout(()=>{if(wheel.isConnected)selectStatisticsWheel(Math.round(wheel.scrollTop/48),true,false);},100);
-      });
-      wheel.addEventListener('keydown',event=>{
-        if(!['ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(event.key))return;
-        event.preventDefault();const current=Math.round(wheel.scrollTop/48),step={ArrowUp:-1,ArrowDown:1,PageUp:-2,PageDown:2}[event.key];
-        selectStatisticsWheel(event.key==='Home'?0:event.key==='End'?statisticsWheelOptions().length-1:current+step);
-        wheel.focus({preventScroll:true});
-      });
-    }
   }
 
   function statisticsHistory(target){
@@ -654,9 +657,10 @@
     const first=new Date(year,month,1),offset=(first.getDay()+6)%7;
     const totalDays=new Date(year,month+1,0).getDate();
     const cells=Math.ceil((offset+totalDays)/7)*7,today=local(Date.now()).slice(0,10);
-    return `<div class="calendar-heading"><strong>${date(first,{month:'long',year:'numeric'})}</strong><div class="row"><button class="calendar-nav" data-action="calendar-month" data-step="-1" aria-label="Предыдущий месяц">${I('back')}</button><button class="calendar-nav" data-action="calendar-month" data-step="1" aria-label="Следующий месяц">${I('chevron')}</button></div></div><div class="calendar-weekdays" aria-hidden="true">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(day=>`<span>${day}</span>`).join('')}</div><div class="calendar-grid">${Array.from({length:cells},(_,i)=>{
+    const monthLabel=date(first,{month:'long',year:'numeric'}).replace(/^./,letter=>letter.toUpperCase());
+    return `<div class="calendar-heading"><strong>${monthLabel}</strong><div class="row"><button class="calendar-nav" data-action="calendar-month" data-step="-1" aria-label="Предыдущий месяц">${I('back')}</button><button class="calendar-nav" data-action="calendar-month" data-step="1" aria-label="Следующий месяц">${I('chevron')}</button></div></div><div class="calendar-weekdays" aria-hidden="true">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(day=>`<span>${day}</span>`).join('')}</div><div class="calendar-grid">${Array.from({length:cells},(_,i)=>{
       const day=new Date(year,month,i-offset+1),value=local(day).slice(0,10);
-      return `<button class="calendar-day ${day.getMonth()!==month?'outside':''} ${value===calendar.day?'selected':''} ${value===today?'today':''} ${calendar.rangeFrom&&calendar.rangeTo&&value>=calendar.rangeFrom&&value<=calendar.rangeTo?'in-range':''} ${value===calendar.rangeFrom||value===calendar.rangeTo?'range-edge':''}" data-action="calendar-day" data-value="${value}" aria-label="${esc(date(day,{day:'numeric',month:'long',year:'numeric'}))}" aria-pressed="${value===calendar.day}" ${value===today?'aria-current="date"':''}>${day.getDate()}</button>`;
+      return `<button class="calendar-day ${day.getMonth()!==month?'outside':''} ${value===calendar.day?'selected':''} ${value===today&&calendar.highlightToday!==false?'today':''} ${calendar.rangeFrom&&calendar.rangeTo&&value>=calendar.rangeFrom&&value<=calendar.rangeTo?'in-range':''} ${value===calendar.rangeFrom||value===calendar.rangeTo?'range-edge':''}" data-action="calendar-day" data-value="${value}" aria-label="${esc(date(day,{day:'numeric',month:'long',year:'numeric'}))}" aria-pressed="${value===calendar.day}" ${value===today?'aria-current="date"':''}>${day.getDate()}</button>`;
     }).join('')}</div>`;
   }
   function timeWheel(field,count,label){
@@ -932,34 +936,34 @@
       case 'phase':navigate('phase',+target.dataset.id);break;
       case 'phase-history':ui.filters={...defaultHistoryFilters(),phaseId:target.dataset.id};ui.phaseHistory=true;ui.statisticsHistory=false;ui.limit=30;navigate('history');break;
       case 'statistics-tab':ui.statistics.tab=target.dataset.value;ui.statistics.restoreScroll=false;render();$('app-content').scrollTop=0;break;
-      case 'statistics-preset':ui.statistics.selection={scope:'time',preset:target.dataset.value};ui.statistics.restoreScroll=false;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=0;break;
-      case 'statistics-summary':ui.statistics.summary=target.dataset.value;renderStatistics();break;
+      case 'statistics-preset':ui.statistics.selection={scope:'time',preset:target.dataset.value};persistStatisticsPreferences();ui.statistics.restoreScroll=false;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=0;break;
+      case 'statistics-summary':ui.statistics.summary=target.dataset.value;persistStatisticsPreferences();renderStatistics();break;
       case 'statistics-settings':statisticsSettingsModal();break;
-      case 'statistics-settings-apply':ui.statistics.chartMetric=modal.metric;closeModal();renderStatistics();break;
+      case 'statistics-settings-apply':ui.statistics.chartMetric=modal.metric;closeModal();persistStatisticsPreferences();renderStatistics();break;
       case 'statistics-metric':modal.metric=target.dataset.value;renderStatisticsSettingsModal();break;
-      case 'statistics-compare-type':ui.statistics.compareType=target.dataset.value;renderStatistics();break;
+      case 'statistics-compare-type':ui.statistics.compareType=target.dataset.value;ensureStatisticsComparison();persistStatisticsPreferences();renderStatistics();break;
       case 'statistics-history':statisticsHistory(target.dataset.target);break;
       case 'statistics-range':statisticsRangeModal(target.dataset.target);break;
-      case 'statistics-range-scope':if((target.dataset.value==='time')===(modal.selection.scope==='time'))break;modal.calendar=null;modal.selection=target.dataset.value==='time'?{scope:'time',preset:'7'}:{scope:String(state.phases[0].id)};renderStatisticsRangeModal();break;
-      case 'statistics-wheel':selectStatisticsWheel(+target.dataset.index);break;
+      case 'statistics-range-scope':switchStatisticsRangeScope(target.dataset.value);break;
+      case 'statistics-range-preset':modal.selection={scope:'time',preset:target.dataset.value};modal.rangeAnchor=null;setStatisticsCalendar('to');renderStatisticsRangeModal();break;
+      case 'statistics-range-period':modal.selection={scope:target.dataset.value};renderStatisticsRangeModal();break;
       case 'statistics-date':{
         setStatisticsCalendar(target.dataset.field);
         renderStatisticsRangeModal();break;
       }
       case 'statistics-range-apply':{
-        const wheel=$('modal').querySelector('.statistics-wheel');if(wheel)selectStatisticsWheel(Math.round(wheel.scrollTop/48),false);
         statisticsWindow(modal.selection);const {target:selectionTarget,selection}=modal,s=ui.statistics;
         if(selectionTarget==='overview')s.selection=M.clone(selection);
         else if(s.compareType==='phases')s[selectionTarget]=selection.scope;
         else s[selectionTarget+'Dates']=M.clone(selection);
-        closeModal();ui.statistics.restoreScroll=false;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=0;break;
+        closeModal();persistStatisticsPreferences();ui.statistics.restoreScroll=false;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=0;break;
       }
       case 'new':ui.entry=M.resumeDraft(state);ui.readingValidation=false;navigate('entry');break;
       case 'resume-draft':{const draft=M.resumableDraft(state);if(draft&&persist(M.storeDraft(state,draft),false)){ui.entry=draft;ui.readingValidation=false;navigate('entry');}break;}
       case 'entry-datetime':entryDateTime(+target.dataset.index);break;
       case 'phase-datetime':phaseDateTime(target.dataset.field);break;
       case 'calendar-month':{const calendar=['filters','statistics-range'].includes(modal.type)?modal.calendar:modal;calendar.month=new Date(calendar.month.getFullYear(),calendar.month.getMonth()+Number(target.dataset.step),1);if(modal.type==='statistics-range')updateStatisticsCalendar();else updateCalendar();break;}
-      case 'calendar-day':if(modal.type==='statistics-range'){modal.selection[modal.calendar.field]=target.dataset.value;modal.calendar.day=target.dataset.value;const day=new Date(target.dataset.value+'T12:00');modal.calendar.month=new Date(day.getFullYear(),day.getMonth(),1);renderStatisticsRangeModal();}else if(modal.type==='filters')acceptHistoryFilterDate(target.dataset.value);else{modal.day=target.dataset.value;const day=new Date(modal.day+'T12:00');modal.month=new Date(day.getFullYear(),day.getMonth(),1);updateCalendar();}break;
+      case 'calendar-day':if(modal.type==='statistics-range')acceptStatisticsRangeDate(target.dataset.value);else if(modal.type==='filters')acceptHistoryFilterDate(target.dataset.value);else{modal.day=target.dataset.value;const day=new Date(modal.day+'T12:00');modal.month=new Date(day.getFullYear(),day.getMonth(),1);updateCalendar();}break;
       case 'calendar-today':{const today=new Date();if(modal.type==='filters')acceptHistoryFilterDate(local(today).slice(0,10));else{modal.day=local(today).slice(0,10);modal.month=new Date(today.getFullYear(),today.getMonth(),1);updateCalendar();}break;}
       case 'time-value':selectTimeValue(target.dataset.field,+target.dataset.value,true);break;
       case 'accept-datetime':{

@@ -6,6 +6,40 @@ const seed = () => M.seed(now);
 const reading = (systolic=120, measuredAt='2026-10-02T08:00:00.000Z') => ({systolic,diastolic:80,pulse:70,measuredAt});
 const session = (readings=[reading()],id=1) => ({id,mode:readings.length===1?'single':'series',measuredAt:readings[0]?.measuredAt||reading().measuredAt,readings,wellbeing:7,tags:['Спокойно'],note:''});
 
+test('statistics preferences round trip applied choices without changing diary data',()=>{
+  const state=seed(),before=M.clone(state),custom={scope:'time',preset:'custom',from:'2026-09-26',to:'2026-10-02'};
+  for(const selection of [custom,{scope:'3'}]){
+    const input={selection,chartMetric:'combined',summary:'median',compareType:'dates',left:'1',right:'3',leftDates:custom,rightDates:{scope:'time',preset:'30'},tab:'comparison',detailScroll:700};
+    const saved=JSON.parse(JSON.stringify(M.statisticsPreferences(input,state.phases))),restored=M.statisticsPreferences(saved,state.phases);
+    assert.deepEqual(restored,saved);assert.deepEqual(restored.selection,selection);
+    assert.equal(restored.summary,'median');assert.equal(restored.chartMetric,'combined');assert.equal(restored.compareType,'dates');
+    assert.deepEqual(M.statisticsWindow(state.sessions,state.phases,restored.selection,now).items,M.statisticsWindow(state.sessions,state.phases,selection,now).items);
+    assert.equal(restored.tab,undefined);assert.equal(restored.detailScroll,undefined);
+  }
+  assert.deepEqual(state,before);
+});
+
+test('statistics preferences recover invalid fields and removed periods independently',()=>{
+  const state=seed(),defaults=M.statisticsPreferences(null,state.phases);
+  for(const value of [null,[],42,'bad'])assert.deepEqual(M.statisticsPreferences(value,state.phases),defaults);
+  for(const selection of [{scope:'404'},{scope:{toString:'invalid'}},{scope:'time',preset:[]},{scope:'time',preset:'custom',from:'2026-02-30',to:'2026-03-01'},{scope:'time',preset:'custom',from:'2026-10-03',to:'2026-10-02'}]){
+    const restored=M.statisticsPreferences({selection,summary:'median',chartMetric:'pulse'},state.phases);
+    assert.deepEqual(restored.selection,defaults.selection);assert.equal(restored.summary,'median');assert.equal(restored.chartMetric,'pulse');
+  }
+  assert.deepEqual(M.statisticsPreferences({selection:{scope:'3'},summary:'unknown',chartMetric:'unknown',compareType:'unknown',left:'3',right:'2',leftDates:{scope:'3'},rightDates:{scope:'time',preset:'custom',from:'',to:''}},[]),M.statisticsPreferences(null,[]));
+});
+
+test('saved statistics presets remain relative and period boundaries stay current',()=>{
+  const state=seed(),weekly=M.statisticsPreferences({selection:{scope:'time',preset:'7',from:'2000-01-01',to:'2000-01-07'}},state.phases);
+  assert.deepEqual(weekly.selection,{scope:'time',preset:'7'});
+  const today=M.statisticsWindow([],[],weekly.selection,now),tomorrow=M.statisticsWindow([],[],weekly.selection,now+M.DAY);
+  assert.equal(tomorrow.from-today.from,M.DAY);assert.equal(tomorrow.until-today.until,M.DAY);
+  const stored=M.statisticsPreferences({selection:{scope:'3'}},state.phases),changed=M.clone(state.phases);
+  changed.find(p=>p.id===3).startedAt='2026-10-01T00:00:00.000Z';
+  const restored=M.statisticsPreferences(stored,changed);
+  assert.equal(M.statisticsWindow(state.sessions,changed,restored.selection,now).from,Date.parse('2026-10-01T00:00:00.000Z'));
+});
+
 test('statistics median handles odd and even samples independently for every metric',()=>{
   const records=[session([reading(100)],1),{...session([{...reading(140),pulse:90}],2),wellbeing:9},{...session([{...reading(200),pulse:200}],3),wellbeing:10}];
   assert.equal(M.statisticsSummary(records,'median').values.systolic,140);
