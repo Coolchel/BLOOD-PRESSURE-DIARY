@@ -5,6 +5,88 @@ const now = Date.parse('2026-10-02T10:00:00.000Z');
 const seed = () => M.seed(now);
 const reading = (systolic=120, measuredAt='2026-10-02T08:00:00.000Z') => ({systolic,diastolic:80,pulse:70,measuredAt});
 const session = (readings=[reading()],id=1) => ({id,mode:readings.length===1?'single':'series',measuredAt:readings[0]?.measuredAt||reading().measuredAt,readings,wellbeing:7,tags:['Спокойно'],note:''});
+
+test('statistics median handles odd and even samples independently for every metric',()=>{
+  const records=[session([reading(100)],1),{...session([{...reading(140),pulse:90}],2),wellbeing:9},{...session([{...reading(200),pulse:200}],3),wellbeing:10}];
+  assert.equal(M.statisticsSummary(records,'median').values.systolic,140);
+  assert.equal(M.statisticsSummary(records,'median').values.pulse,90);
+  assert.equal(M.statisticsSummary(records,'median').values.wellbeing,9);
+  const even=M.statisticsSummary(records.slice(0,2),'median');
+  assert.equal(even.values.systolic,120);assert.equal(even.values.pulse,80);assert.equal(even.values.wellbeing,8);
+  assert.equal(M.statisticsSummary(records).values.systolic,440/3);
+});
+test('statistics median gives a series one vote and retains fractional record averages',()=>{
+  const records=[session([reading(100),reading(101),reading(102)],1),session([reading(120),reading(121)],2),session([reading(200)],3)],before=M.clone(records);
+  const result=M.statisticsSummary(records,'median');
+  assert.equal(result.count,3);assert.equal(result.values.systolic,120.5);assert.equal(result.systolic,121);
+  assert.deepEqual(records,before);assert.equal(M.statisticsSummary(records,'mean').values.systolic,M.stats(records).averages.systolic);
+});
+test('statistics summary handles empty and single samples and rejects unknown methods',()=>{
+  for(const method of ['mean','median']){
+    assert.equal(M.statisticsSummary([],method).count,0);assert.equal(M.statisticsSummary([],method).values.pulse,0);
+    assert.equal(M.statisticsSummary([session()],method).pulse,70);
+  }
+  assert.throws(()=>M.statisticsSummary([],'trimmed'));
+});
+
+test('statistics calendar windows include both dates and compare preceding calendar days', () => {
+  const records=[session([reading(120,new Date(2026,8,25,23,59).toISOString())],1),session([reading(121,new Date(2026,8,26,0,0).toISOString())],2),session([reading(122,new Date(2026,9,2,23,59).toISOString())],3),session([reading(123,new Date(2026,9,3,0,0).toISOString())],4)];
+  const w=M.statisticsWindow(records,[],{preset:'7'},+new Date(2026,9,2,12));
+  assert.deepEqual(w.items.map(s=>s.id),[3,2]);assert.equal(w.days,2);
+  assert.equal(new Date(w.from).getDate(),26);assert.equal(new Date(w.until).getDate(),3);
+  assert.deepEqual(w.previous.items.map(s=>s.id),[1]);assert.equal(new Date(w.previous.from).getDate(),19);
+  assert.deepEqual(M.statisticsWindow(records,[],{preset:'custom',from:'2026-09-26',to:'2026-10-02'}).items,w.items);
+  assert.equal(M.statisticsWindow(records,[],{preset:'all'}).items.length,4);
+  for(const preset of ['30','90'])assert.equal(Math.round((M.statisticsWindow([],[],{preset},+new Date(2026,9,2,12)).until-M.statisticsWindow([],[],{preset},+new Date(2026,9,2,12)).from)/M.DAY),Number(preset));
+});
+test('statistics custom dates reject impossible, incomplete and inverted ranges', () => {
+  for(const [from,to] of [['2026-02-30','2026-03-01'],['','2026-10-02'],['2026-10-03','2026-10-02']])assert.throws(()=>M.statisticsWindow([],[],{preset:'custom',from,to}));
+  assert.throws(()=>M.statisticsWindow([],[],{scope:'404'}));
+  const empty=M.statisticsWindow([],[],{preset:'all'});assert.equal(empty.from,null);assert.equal(empty.previous,null);assert.equal(empty.days,0);
+});
+test('statistics calendar comparison respects daylight saving and year boundaries', () => {
+  const previousTimezone=process.env.TZ;
+  try{
+    process.env.TZ='Europe/Berlin';
+    const w=M.statisticsWindow([],[],{preset:'7'},+new Date(2026,2,29,12));
+    assert.equal(new Date(w.from).getDate(),23);assert.equal(new Date(w.until).getDate(),30);
+    assert.equal((w.until-w.from)/3600000,167);assert.equal((w.previous.until-w.previous.from)/3600000,168);
+    const year=M.statisticsWindow([],[],{preset:'custom',from:'2026-12-30',to:'2027-01-02'});
+    assert.equal(new Date(year.previous.from).getDate(),26);assert.equal(new Date(year.previous.until).getFullYear(),2026);
+  }finally{if(previousTimezone===undefined)delete process.env.TZ;else process.env.TZ=previousTimezone;}
+});
+test('statistics periods preserve crossing series and report shared records without double counting', () => {
+  const a=session([reading(100,'2026-10-01T22:00:00Z'),reading(140,'2026-10-02T01:00:00Z')],1),b=session([reading(130,'2026-10-02T04:00:00Z')],2);
+  const phases=[{id:1,startedAt:'2026-10-01T20:00:00Z',endedAt:'2026-10-02T00:00:00Z'},{id:2,startedAt:'2026-10-01T21:00:00Z',endedAt:null}];
+  const left=M.statisticsWindow([a,b],phases,{scope:'1'}),right=M.statisticsWindow([a,b],phases,{scope:'2'});
+  assert.deepEqual(left.items.map(s=>s.id),[1]);assert.equal(M.stats(left.items).systolic,120);
+  const compared=M.statisticsComparison(left.items,right.items);assert.equal(compared.shared,1);assert.equal(compared.left.count,1);assert.equal(compared.right.count,2);assert.equal(compared.delta.systolic,5);
+});
+test('statistics daily groups weight records equally and keep every original ID', () => {
+  const records=[session([reading(120),reading(121)],1),session([reading(140)],2)];
+  const points=M.statisticsChartPoints(records,'day');assert.equal(points.length,1);assert.equal(points[0].systolic,130.25);assert.equal(points[0].count,2);assert.deepEqual(points[0].ids,[1,2]);
+  const all=Array.from({length:100},(_,i)=>session([reading(120)],i+1));assert.equal(M.statisticsChartPoints(all).length,100);
+});
+test('statistics weekly groups start on Monday across the new year', () => {
+  const records=[session([reading(120,new Date(2026,11,28,12).toISOString())],1),session([reading(130,new Date(2027,0,3,12).toISOString())],2),session([reading(140,new Date(2027,0,4,12).toISOString())],3)];
+  const points=M.statisticsChartPoints(records,'week');assert.deepEqual(points.map(p=>p.count),[2,1]);assert.equal(new Date(points[0].groupStart).getDay(),1);assert.equal(points[0].systolic,125);assert.equal(points[1].gapBefore,false);
+});
+test('statistics chart gaps retain missing days without inventing zero values', () => {
+  const records=[session([reading(120,new Date(2026,9,1,8).toISOString())],1),session([reading(130,new Date(2026,9,4,8).toISOString())],2)];
+  for(const mode of ['records','day']){const points=M.statisticsChartPoints(records,mode);assert.equal(points.length,2);assert.equal(points[1].gapBefore,true);assert.deepEqual(points.map(p=>p.systolic),[120,130]);}
+  assert.deepEqual(M.statisticsChartPoints([]),[]);
+});
+test('statistics extremes link to raw reading timestamps and wellbeing record timestamps', () => {
+  const first=session([reading(100,'2026-10-01T22:00:00Z'),{...reading(160,'2026-10-02T00:01:00Z'),pulse:200}],1),second={...session([reading(120,'2026-10-03T00:00:00Z')],2),wellbeing:10};
+  const extremes=M.statisticsExtremes([second,first]);
+  assert.equal(extremes.systolic.min.value,100);assert.equal(extremes.systolic.max.id,1);assert.equal(extremes.systolic.max.measuredAt,'2026-10-02T00:01:00Z');assert.equal(extremes.pulse.max.readingIndex,1);assert.equal(extremes.wellbeing.max.id,2);assert.equal(extremes.wellbeing.min.id,1);
+  assert.equal(M.statisticsExtremes([]).pulse.min,null);
+});
+test('statistics comparison uses unrounded averages and leaves missing comparisons unavailable', () => {
+  const left=[session([reading(120),reading(121)],1)],right=[session([reading(120)],2)];
+  assert.equal(M.statisticsComparison(left,right).delta.systolic,-0.5);
+  assert.equal(M.statisticsComparison(left,[]).delta,null);assert.equal(M.statisticsComparison(left,left).shared,1);
+});
 test('demo has valid records, readings and non-overlapping periods', () => {
   const state=seed();assert.equal(state.sessions.length,90);
   assert.deepEqual(M.restore(M.backup(state)), {sessions:state.sessions.map(s=>({...s,createdAt:s.measuredAt})),phases:state.phases});

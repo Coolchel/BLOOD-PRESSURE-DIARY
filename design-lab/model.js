@@ -149,6 +149,15 @@
     const averages = Object.fromEntries(['systolic','diastolic','pulse','wellbeing'].map(key => [key,items.length ? items.reduce((sum,s) => sum+(key === 'wellbeing' ? s.wellbeing : s.averages[key]),0)/items.length : 0]));
     return { count:items.length, averages, ...Object.fromEntries(Object.entries(averages).map(([k,v]) => [k,k === 'wellbeing' ? Math.round(v*10)/10 : Math.round(v)])) };
   }
+  function statisticsSummary(sessions,method='mean') {
+    if(!['mean','median'].includes(method))throw new Error('Неизвестный способ расчёта.');
+    const items=sessions.map(summary);
+    const values=method==='mean'?stats(sessions).averages:Object.fromEntries(['systolic','diastolic','pulse','wellbeing'].map(key=>{
+      const sorted=items.map(s=>key==='wellbeing'?s.wellbeing:s.averages[key]).sort((a,b)=>a-b),middle=Math.floor(sorted.length/2);
+      return [key,sorted.length?(sorted.length%2?sorted[middle]:(sorted[middle-1]+sorted[middle])/2):0];
+    }));
+    return {count:items.length,method,values,...Object.fromEntries(Object.entries(values).map(([key,value])=>[key,key==='wellbeing'?Math.round(value*10)/10:Math.round(value)]))};
+  }
   const inside = (s,p) => Date.parse(s.measuredAt) >= Date.parse(p.startedAt) && (p.endedAt === null || Date.parse(s.measuredAt) < Date.parse(p.endedAt));
   const phasesFor = (s,phases) => phases.filter(p => inside(s,p));
   const phaseFor = (s,phases) => phasesFor(s,phases)[0];
@@ -243,6 +252,83 @@
       return { id:group[0].id,measuredAt:new Date(group.reduce((sum,s) => sum+Date.parse(s.measuredAt),0)/group.length).toISOString(),from:group[0].measuredAt,to:group.at(-1).measuredAt,...averages,count:group.length,ids:group.map(s=>s.id) };
     });
   }
+  const localDay = value => {
+    const d=new Date(value);
+    return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+  };
+  function calendarDate(value) {
+    const d=new Date(value+'T00:00:00');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(+d)||localDay(d)!==value)throw new Error('Укажите корректные даты.');
+    return d;
+  }
+  const dayNumber = value => {
+    const d=new Date(value);
+    return Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/DAY;
+  };
+  function statisticsWindow(sessions,phases,selection={},now=Date.now()) {
+    const {scope='time',preset='7'}=selection;
+    if(scope!=='time'){
+      const phase=phases.find(p=>String(p.id)===String(scope));
+      if(!phase)throw new Error('Период не найден.');
+      const items=filter(sessions,{phase});
+      return {items,phase,from:Date.parse(phase.startedAt),until:phase.endedAt?Date.parse(phase.endedAt):Math.max(now,...items.map(s=>Date.parse(s.measuredAt)+1)),previous:null,days:new Set(items.map(s=>localDay(s.measuredAt))).size};
+    }
+    if(preset==='all'){
+      const items=filter(sessions);
+      return {items,phase:null,from:items.length?+calendarDate(localDay(items.at(-1).measuredAt)):null,until:items.length?+nextDay(calendarDate(localDay(items[0].measuredAt))):null,previous:null,days:new Set(items.map(s=>localDay(s.measuredAt))).size};
+    }
+    let start,end;
+    if(preset==='custom'){
+      start=calendarDate(selection.from||'');end=calendarDate(selection.to||'');
+      if(start>end)throw new Error('Дата начала должна быть не позже даты окончания.');
+    }else{
+      if(!['7','30','90'].includes(String(preset)))throw new Error('Выберите интервал.');
+      end=calendarDate(localDay(now));start=new Date(end);start.setDate(start.getDate()-Number(preset)+1);
+    }
+    const until=+nextDay(end),from=+start,length=dayNumber(end)-dayNumber(start)+1;
+    const priorStart=new Date(start);priorStart.setDate(priorStart.getDate()-length);
+    const items=sessions.filter(s=>Date.parse(s.measuredAt)>=from&&Date.parse(s.measuredAt)<until).sort((a,b)=>Date.parse(b.measuredAt)-Date.parse(a.measuredAt)||b.id-a.id);
+    return {items,phase:null,from,until,previous:{from:+priorStart,until:from,items:sessions.filter(s=>Date.parse(s.measuredAt)>=+priorStart&&Date.parse(s.measuredAt)<from)},days:new Set(items.map(s=>localDay(s.measuredAt))).size};
+  }
+  function nextDay(value) { const d=new Date(value);d.setDate(d.getDate()+1);return d; }
+  function statisticsChartPoints(sessions,aggregation='records') {
+    const ordered=sessions.slice().sort((a,b)=>Date.parse(a.measuredAt)-Date.parse(b.measuredAt)||a.id-b.id);
+    if(!['records','day','week'].includes(aggregation))throw new Error('Выберите вид графика.');
+    const groups=new Map();
+    ordered.forEach(s=>{
+      const start=calendarDate(localDay(s.measuredAt));
+      if(aggregation==='week')start.setDate(start.getDate()-(start.getDay()+6)%7);
+      const key=aggregation==='records'?s.id:localDay(start);
+      if(!groups.has(key))groups.set(key,{start:+start,items:[]});
+      groups.get(key).items.push(s);
+    });
+    let previous=null;
+    return [...groups.values()].map(({start,items})=>{
+      const mean=stats(items).averages,first=items[0],last=items.at(-1);
+      const point={...mean,id:first.id,measuredAt:new Date(items.reduce((sum,s)=>sum+Date.parse(s.measuredAt),0)/items.length).toISOString(),from:first.measuredAt,to:last.measuredAt,count:items.length,ids:items.map(s=>s.id),groupStart:new Date(start).toISOString(),gapBefore:previous!==null&&dayNumber(start)-dayNumber(previous)>(aggregation==='week'?7:1)};
+      previous=start;return point;
+    });
+  }
+  function statisticsExtremes(sessions) {
+    const result=Object.fromEntries(['systolic','diastolic','pulse','wellbeing'].map(key=>[key,{min:null,max:null}]));
+    const candidates=[];
+    sessions.forEach(s=>{
+      s.readings.forEach((r,index)=>candidates.push({id:s.id,measuredAt:r.measuredAt||s.measuredAt,index,reading:r}));
+      candidates.push({id:s.id,measuredAt:s.measuredAt,index:null,reading:{wellbeing:s.wellbeing}});
+    });
+    candidates.sort((a,b)=>Date.parse(a.measuredAt)-Date.parse(b.measuredAt)||a.id-b.id);
+    candidates.forEach(({id,measuredAt,index,reading})=>Object.keys(result).forEach(key=>{
+      if(reading[key]===undefined)return;
+      const point={value:reading[key],id,measuredAt,readingIndex:index};
+      if(!result[key].min||point.value<result[key].min.value)result[key].min=point;
+      if(!result[key].max||point.value>result[key].max.value)result[key].max=point;
+    }));
+    return result;
+  }
+  function statisticsComparison(left,right) {
+    const a=stats(left),b=stats(right),ids=new Set(left.map(s=>s.id));
+    return {left:a,right:b,shared:right.filter(s=>ids.has(s.id)).length,delta:a.count&&b.count?Object.fromEntries(Object.keys(a.averages).map(key=>[key,Math.round((b.averages[key]-a.averages[key])*10)/10])):null};
+  }
   function backup(state) {
     return { app:'Давление',version:2,exportedAt:new Date().toISOString(),
       sessions:state.sessions.map(s => ({ id:s.id,measured_at:s.measuredAt,wellbeing:s.wellbeing,tags:s.tags,note:s.note,mode:s.mode,created_at:s.createdAt || s.measuredAt })),
@@ -300,5 +386,5 @@
     next.copies=[{ date,at:stamp,payload:backup(next) },...(next.copies||[]).filter(c=>c.date!==date)].slice(0,7);
     return next;
   }
-  return { DAY,MAX_SERIES_READINGS,MAX_CONCURRENT_PHASES,TAGS,KINDS,PHASE_ICONS,PHASE_COLORS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,inside,phaseFor,phasesFor,phaseAppearance,phaseStatus,phaseLimitConflict,historyInterval,filter,ranges,savePhase,finishPhase,baseline,chartPoints,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
+  return { DAY,MAX_SERIES_READINGS,MAX_CONCURRENT_PHASES,TAGS,KINDS,PHASE_ICONS,PHASE_COLORS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,statisticsSummary,inside,phaseFor,phasesFor,phaseAppearance,phaseStatus,phaseLimitConflict,historyInterval,filter,ranges,savePhase,finishPhase,baseline,chartPoints,statisticsWindow,statisticsChartPoints,statisticsExtremes,statisticsComparison,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
 });

@@ -18,6 +18,9 @@
     valuesList:'M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01',
     singleReading:'M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 12h2l1-3 2 6 1-3h2',
     chevronDown:'M6 9l6 6 6-6',
+    compare:'M4 7h16M16 3l4 4-4 4M20 17H4M8 13l-4 4 4 4',
+    calendarClock:'M10 21H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M7 2v4M15 2v4M3 9h16M22 17a5 5 0 1 0-10 0 5 5 0 0 0 10 0M17 14v3l2 1',
+    compareBars:'M5 20V10h5v10M14 20V4h5v16M3 20h18',
     pill:'M9 3a5 5 0 0 1 7 7l-6 6a5 5 0 0 1-7-7l6-6zM6 6l7 7',
     moon:'M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11z',
     sun:'M16 12a4 4 0 1 0-8 0 4 4 0 0 0 8 0M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5',
@@ -57,7 +60,7 @@
     else {state=M.seed();storageError='Не удалось прочитать сохранённый дневник. Используются тестовые данные; исходное хранилище не перезаписывается.';}
   }
   const defaultHistoryFilters=()=>({sort:'newest',from:'',to:'',interval:'all',mode:'all',phaseId:'all',wellbeingMin:'',wellbeingMax:'',tags:[],withNote:false});
-  const ui={view:'home',id:null,detailReturn:'history',period:'7',scope:'time',metric:'pressure',filters:defaultHistoryFilters(),phaseHistory:false,limit:30,entry:null,error:'',readingValidation:false,chartSelection:{},phaseGroups:{},phaseGroupMode:null,undo:null};
+  const ui={view:'home',id:null,detailReturn:'history',period:'7',scope:'time',metric:'pressure',filters:defaultHistoryFilters(),phaseHistory:false,statisticsHistory:false,statistics:{tab:'overview',selection:{scope:'time',preset:'7'},chartMetric:'pressure',summary:'mean',detailScroll:0,restoreScroll:false,compareType:'phases',left:null,right:null,leftDates:null,rightDates:null},limit:30,entry:null,error:'',readingValidation:false,chartSelection:{},phaseGroups:{},phaseGroupMode:null,undo:null};
   let modal=null,toastTimer,saveAnimationTimer,focusBeforeModal;
   document.body.classList.add('theme-'+theme);
   const params=new URLSearchParams(location.search);
@@ -117,21 +120,27 @@
   }
   function mutation(next,message){const previous=M.clone(state);if(persist(next)){ui.undo=previous;toast(message,true);return true;}return false;}
   function clearPhaseHistory(){
-    if(!ui.phaseHistory)return;
-    ui.filters.phaseId='all';ui.phaseHistory=false;ui.limit=30;
+    if(!ui.phaseHistory&&!ui.statisticsHistory)return;
+    if(ui.statisticsHistory)ui.filters=defaultHistoryFilters();else ui.filters.phaseId='all';
+    ui.phaseHistory=false;ui.statisticsHistory=false;ui.limit=30;
   }
   function navigate(view,id=null){
     if(ui.view==='entry'&&view!=='entry')saveDraft();
-    if(view==='detail')ui.detailReturn=theme==='clarity'&&ui.view==='home'?'home':'history';
+    if(view==='detail'){
+      ui.detailReturn=theme==='clarity'&&['home','statistics'].includes(ui.view)?ui.view:'history';
+      ui.statistics.restoreScroll=ui.detailReturn==='statistics';
+      if(ui.statistics.restoreScroll)ui.statistics.detailScroll=$('app-content').scrollTop;
+    }else if(!(view==='statistics'&&ui.view==='detail'&&ui.detailReturn==='statistics'))ui.statistics.restoreScroll=false;
     ui.error='';location.hash=view+(id!==null?'/'+id:'');
     readRoute();
   }
   function readRoute(){
     const [view,id]=location.hash.slice(1).split('/');
+    if(!['statistics','detail'].includes(view)||(view==='statistics'&&!['statistics','detail'].includes(ui.view)))ui.statistics.restoreScroll=false;
     if(!['history','detail'].includes(view))clearPhaseHistory();
     ui.view=['home','history','statistics','phases','settings','detail','phase','entry'].includes(view)?view:'home';ui.id=id?Number(id):null;
     if(ui.view==='entry'&&!ui.entry)ui.entry=M.resumeDraft(state);
-    render();$('app-content').scrollTop=0;
+    render();$('app-content').scrollTop=ui.view==='statistics'&&ui.statistics.restoreScroll?ui.statistics.detailScroll:0;
   }
   window.addEventListener('hashchange',readRoute);
   const newReading=()=>M.newReading();
@@ -139,7 +148,7 @@
   function saveDraft(){if(!ui.entry)return false;return persist(M.storeDraft(state,ui.entry),false);}
   function recordCard(s){
     const v=M.summary(s),matched=M.phasesFor(s,state.phases),p=matched[0];
-    if(theme==='clarity'&&ui.view==='history')return `<button class="card record-card clarity-history-record ${s.mode==='series'?'history-series':'history-single'}" data-action="detail" data-id="${s.id}" aria-label="Измерение ${esc(full(s.measuredAt))}, ${v.systolic} на ${v.diastolic}, пульс ${v.pulse}, самочувствие ${s.wellbeing} из 10">
+    if(theme==='clarity'&&(ui.view==='history'||modal?.type==='statistics-records'))return `<button class="card record-card clarity-history-record ${s.mode==='series'?'history-series':'history-single'}" data-action="detail" data-id="${s.id}" aria-label="Измерение ${esc(full(s.measuredAt))}, ${v.systolic} на ${v.diastolic}, пульс ${v.pulse}, самочувствие ${s.wellbeing} из 10">
       <span class="history-record-header"><span class="history-date-block"><time class="history-date" datetime="${esc(s.measuredAt)}">${date(s.measuredAt,{day:'numeric',month:'long'})} <span class="history-date-year">${date(s.measuredAt,{year:'numeric'})}</span></time><span class="history-record-mode">${s.mode==='series'?I('layers')+'Серия · '+readingCount(s.readings.length):I('singleReading')+'Одиночный замер'}</span></span><span class="history-time-block"><time class="history-time" datetime="${esc(s.measuredAt)}">${time(s.measuredAt)}</time>${I('chevron','record-chevron')}</span></span>
       <span class="history-metrics"><span class="history-pressure"><span class="history-metric-label">${s.mode==='series'?'Среднее давление':'Давление'}</span><span class="history-bp"><span class="bp-upper">${v.systolic}</span><span class="slash">/</span><span class="bp-lower">${v.diastolic}</span></span></span><span class="history-pulse" data-metric="pulse"><span class="history-metric-label">Пульс</span><span class="history-pulse-value">${I('heartPulse')}<strong>${v.pulse}</strong></span></span></span>
       <span class="history-context">${matched.length?`<span class="history-periods">${matched.map(p=>`<span class="history-period" style="--phase-color:${kind(p).color}" title="${esc(p.title)} · ${esc(range(p))}">${I(kind(p).icon)}<span class="history-period-text"><strong>${esc(p.title)}</strong><small>${range(p)}</small></span></span>`).join('')}</span>`:''}<span class="history-wellbeing" data-metric="wellbeing">${I('wellbeingGauge')}<span>Самочувствие <strong>${s.wellbeing}<small>/10</small></strong></span></span></span>
@@ -156,12 +165,16 @@
     return `<div class="card chart-card" data-metric="${metric}"><div class="chart-heading row between"><strong>${title}</strong><button class="text-button" data-action="chart-table" data-chart="${id}" aria-label="Все значения графика ${title}">${I('table')}</button></div><div class="chart-legend">${metric==='pressure'?'<span><i class="line-key"></i>Верхнее</span><span><i class="line-key second"></i>Нижнее · пунктир</span>':`<span><i class="line-key"></i>${metric==='pulse'?'Пульс · уд/мин':'Самочувствие · 1–10'}</span>`}</div>${items.length?`<div class="chart-mount" data-chart="${id}"></div><div id="readout-${id}" class="point-readout">Нажмите на точку, чтобы увидеть значения.</div><div class="chart-caption">${points.length<items.length?'Средние по '+points.length+' временным интервалам. Исходные записи — в таблице.':'Каждая точка — запись; для серии показано среднее.'}</div>`:empty('Нет записей в этом интервале','Выберите другой интервал или добавьте измерение.')}</div>`;
   }
   let chartData={};
+  function claritySummaryMetrics(s){
+    return `<div class="statistics-average-pressure"><span class="bp-upper">${s.count?s.systolic:'—'}</span><span class="slash">/</span><span class="bp-lower">${s.count?s.diastolic:'—'}</span></div><span class="statistics-eyebrow">Давление</span><div class="statistics-average-secondary"><div data-metric="pulse">${I('heartPulse')}<span><strong>${s.count?s.pulse:'—'}</strong><span>Пульс</span></span></div><div data-metric="wellbeing">${I('wellbeingGauge')}<span><strong>${s.count?num(s.wellbeing,1):'—'}</strong><span>Самочувствие</span></span></div></div>`;
+  }
   function clarityMeasurementCard(item,open=false){
     const s=M.summary(item),tag=open?'button':'div';
     const attributes=open?`data-action="detail" data-id="${item.id}"`:'role="group"';
     const dateTime=open?`<span class="history-record-header latest-date-time"><span class="history-date-block"><time class="history-date" datetime="${esc(item.measuredAt)}">${date(item.measuredAt,{day:'numeric',month:'long'})} <span class="history-date-year">${date(item.measuredAt,{year:'numeric'})}</span></time></span><span class="history-time-block"><time class="history-time" datetime="${esc(item.measuredAt)}">${time(item.measuredAt)}</time></span></span>`:`<span class="topline"><span class="pill">${date(item.measuredAt,{day:'numeric',month:'long'})} в ${time(item.measuredAt)}</span></span>`;
-    const vitals=open?`<span class="home-vitals"><span class="home-vital" data-metric="pulse"><span class="home-vital-value"><strong>${s.pulse}</strong><small>уд/мин</small></span><span class="home-vital-caption">Пульс</span></span><span class="home-vital" data-metric="wellbeing"><span class="home-vital-value"><strong>${item.wellbeing}</strong><small>из 10</small></span><span class="home-vital-caption">Самочувствие</span></span></span>`:`<span class="latest-bottom"><span class="latest-metric" data-metric="pulse"><span class="latest-metric-icon">${I('heartPulse')}</span><span><span class="latest-metric-label">Пульс</span><span class="latest-metric-value"><strong>${s.pulse}</strong><small>уд/мин</small></span></span></span><span class="latest-metric" data-metric="wellbeing"><span class="latest-metric-icon">${I('wellbeingGauge')}</span><span><span class="latest-metric-label">Самочувствие</span><span class="latest-metric-value"><strong>${item.wellbeing}</strong><small>из 10</small></span></span></span></span>`;
-    return `<${tag} class="card latest clarity-latest" ${attributes} aria-label="${open?'Последнее измерение':'Измерение'}: ${s.systolic} на ${s.diastolic}, пульс ${s.pulse}, самочувствие ${item.wellbeing} из 10, ${esc(full(item.measuredAt))}">${dateTime}<span class="bp"><span class="bp-upper">${s.systolic}</span><span class="slash">/</span><span class="bp-lower">${s.diastolic}</span></span>${vitals}</${tag}>`;
+    const vitals=`<span class="latest-bottom"><span class="latest-metric" data-metric="pulse"><span class="latest-metric-icon">${I('heartPulse')}</span><span><span class="latest-metric-label">Пульс</span><span class="latest-metric-value"><strong>${s.pulse}</strong><small>уд/мин</small></span></span></span><span class="latest-metric" data-metric="wellbeing"><span class="latest-metric-icon">${I('wellbeingGauge')}</span><span><span class="latest-metric-label">Самочувствие</span><span class="latest-metric-value"><strong>${item.wellbeing}</strong><small>из 10</small></span></span></span></span>`;
+    const values=open?claritySummaryMetrics({...s,count:1,wellbeing:item.wellbeing}):`<span class="bp"><span class="bp-upper">${s.systolic}</span><span class="slash">/</span><span class="bp-lower">${s.diastolic}</span></span>${vitals}`;
+    return `<${tag} class="card latest clarity-latest${open?' home-summary':''}" ${attributes} aria-label="${open?'Последнее измерение':'Измерение'}: ${s.systolic} на ${s.diastolic}, пульс ${s.pulse}, самочувствие ${item.wellbeing} из 10, ${esc(full(item.measuredAt))}">${dateTime}${values}</${tag}>`;
   }
   function clarityPeriodCard(p){
     const content=`<span class="home-period-icon">${I(p?kind(p).icon:'calendar')}</span><span class="grow"><strong>${p?esc(p.title):'Без периода'}</strong><span class="home-period-meta">${p?(ui.view==='home'&&M.phaseStatus(p)==='scheduled'?'Запланирован · ':'')+range(p):'Выбрать период наблюдения'}</span></span>${I('chevron','home-period-chevron')}`;
@@ -226,6 +239,7 @@
     return summary+applied+items.slice(0,ui.limit).map(recordCard).join('')+(items.length>ui.limit?`<button class="secondary" style="width:100%" data-action="load-more">${theme==='clarity'?'Показать еще':`Показать ещё · ${ui.limit} из ${items.length}`}</button>`:'')+(!items.length?empty(filtered?'Ничего не найдено':'История пока пустая',filtered?(theme==='clarity'?'Попробуйте убрать один из фильтров.':'Измените даты в фильтрах.'):'Сохранённые измерения появятся здесь.',filtered&&theme==='clarity'?'<button class="secondary" data-action="reset-filters">Сбросить фильтры</button>':''):'');
   }
   function statistics(){
+    if(theme==='clarity')return clarityStatistics();
     const selectedPhase=ui.scope==='time'?null:state.phases.find(p=>String(p.id)===ui.scope);
     if(ui.scope!=='time'&&!selectedPhase)ui.scope='time';
     const items=M.filter(state.sessions,selectedPhase?{phase:selectedPhase}:{days:ui.period});
@@ -234,6 +248,208 @@
     return `<label class="sr-only" for="stats-scope">Интервал или период наблюдения</label><select class="scope-select" id="stats-scope" data-change="scope"><option value="time" ${ui.scope==='time'?'selected':''}>По времени</option>${state.phases.map(p=>`<option value="${p.id}" ${ui.scope===String(p.id)?'selected':''}>${esc(p.title)} · ${range(p)}</option>`).join('')}</select>${ui.scope==='time'?`<div class="segmented" aria-label="Интервал статистики">${[['7','7 дней'],['30','30 дней'],['90','90 дней'],['all','Всё']].map(([v,l])=>`<button data-action="period" data-value="${v}" class="${v===ui.period?'active':''}" aria-pressed="${v===ui.period}">${l}</button>`).join('')}</div>`:''}<div class="scope-caption">${esc(title)} · ${recs(items.length)}<br>${items.length?date(window?window.from:items.at(-1).measuredAt)+' — '+date(window?window.until:items[0].measuredAt):'Записей пока нет'}</div><div class="segmented" aria-label="Показатель графика">${[['pressure','Давление'],['pulse','Пульс'],['wellbeing','Самочувствие']].map(([v,l])=>`<button data-action="metric" data-value="${v}" class="${v===ui.metric?'active':''}" aria-pressed="${v===ui.metric}">${l}</button>`).join('')}</div>`+chartMarkup('stats',ui.metric==='pressure'?'Давление · мм рт. ст.':ui.metric==='pulse'?'Пульс · уд/мин':'Самочувствие · баллы',items,ui.metric,selectedPhase?[selectedPhase]:state.phases,window)+`<div class="section-title">Средние значения</div><div class="scope-caption">${esc(title)} · ${recs(items.length)}. Серия учитывается как одна запись.</div>`+statGrid(s)+`<div class="section-title">Диапазон замеров</div><div class="scope-caption">Самые низкие и высокие значения. В серии учитывается каждый замер.</div><div class="card">${[['systolic','Верхнее','мм рт. ст.'],['diastolic','Нижнее','мм рт. ст.'],['pulse','Пульс','уд/мин']].map(([key,label,unit])=>`<div class="range-row" data-metric="${key}"><span>${label}<br><small class="muted">${unit}</small></span><strong>${r[key]?r[key].join(' — '):'—'}</strong></div>`).join('')}</div>`+comparisons();
   }
 
+  const statisticsMetrics=[['systolic','Верхнее','мм рт. ст.'],['diastolic','Нижнее','мм рт. ст.'],['pulse','Пульс','уд/мин'],['wellbeing','Самочувствие','из 10']];
+  const statisticsPresets=[['7','7 дней'],['30','30 дней'],['90','90 дней'],['all','Всё']];
+  const measuredDays=n=>n+' '+(n%100>=11&&n%100<=14?'дней':n%10===1?'день':n%10>=2&&n%10<=4?'дня':'дней')+' с измерениями';
+  function statisticsWindow(selection=ui.statistics.selection){return M.statisticsWindow(state.sessions,state.phases,selection);}
+  function statisticsTitle(selection){
+    if(selection.scope!=='time')return state.phases.find(p=>String(p.id)===String(selection.scope))?.title||'Выберите период';
+    return selection.preset==='all'?'Все записи':selection.preset==='custom'?'Выбранные даты':'Последние '+selection.preset+' дней';
+  }
+  function statisticsDates(w){
+    if(w.from===null)return 'Записей пока нет';
+    const format={day:'numeric',month:'short',year:'numeric'};
+    if(w.phase&&!w.phase.endedAt&&M.phaseStatus(w.phase)==='scheduled')return 'С '+date(w.from,format)+' · запланирован';
+    return date(w.from,format)+' — '+(w.phase&&!w.phase.endedAt?'сейчас':date(w.until-1,format));
+  }
+  function statisticsRangeButton(selection,target='overview'){
+    const w=statisticsWindow(selection),appearance=w.phase?kind(w.phase):null;
+    return `<button class="statistics-range" data-action="statistics-range" data-target="${target}"><span class="statistics-range-icon" ${appearance?`style="color:${appearance.color}"`:''}>${I(appearance?.icon||'calendar')}</span><span class="grow"><strong>${esc(statisticsTitle(selection))}</strong><small>${esc(statisticsDates(w))}</small></span>${I('chevronDown')}</button>`;
+  }
+  function statisticsHeaderRange(){
+    const w=statisticsWindow();
+    return `<div class="statistics-header-actions"><button class="icon-button statistics-header-action" data-action="statistics-range" data-target="overview" title="Даты и периоды" aria-label="Даты и периоды: ${esc(statisticsTitle(ui.statistics.selection))}, ${esc(statisticsDates(w))}">${I('calendarClock')}</button><button class="icon-button statistics-header-action" data-action="statistics-tab" data-value="comparison" title="Сравнить периоды и даты" aria-label="Сравнить периоды и даты">${I('compareBars')}</button></div>`;
+  }
+  function statisticsContextDates(w){
+    if(w.from===null)return '';
+    const first=new Date(w.from),last=new Date(w.until-1),fullDate={day:'numeric',month:'long',year:'numeric'};
+    if(w.phase&&!w.phase.endedAt)return M.phaseStatus(w.phase)==='scheduled'?'С '+date(first,fullDate):date(first,fullDate)+' — сейчас';
+    if(first.getFullYear()===last.getFullYear()){
+      if(first.getMonth()===last.getMonth())return first.getDate()===last.getDate()?date(first,fullDate):first.getDate()+'–'+date(last,fullDate);
+      return date(first,{day:'numeric',month:'long'})+' — '+date(last,fullDate);
+    }
+    return date(first,fullDate)+' — '+date(last,fullDate);
+  }
+  function statisticsContext(){
+    const w=statisticsWindow(),appearance=w.phase?kind(w.phase):null,dates=statisticsContextDates(w),all=ui.statistics.selection.scope==='time'&&ui.statistics.selection.preset==='all';
+    const copy=w.phase?`<strong>Период «${esc(w.phase.title)}»</strong><small>${esc(dates)}${M.phaseStatus(w.phase)==='scheduled'?' · Запланирован':''}</small>`:all?`<strong>Данные за всё время</strong><small>${esc(dates||'Измерений пока нет')}</small>`:`<span class="statistics-context-prefix">Данные за</span> <strong>${esc(dates)}</strong>`;
+    return `<div class="statistics-context" role="group" aria-label="Выбранный интервал статистики"><span class="statistics-context-icon" ${appearance?`style="color:${appearance.color}"`:''}>${I(appearance?.icon||'calendar')}</span><div class="statistics-context-copy">${copy}</div></div>`;
+  }
+  const statisticsChartModes=[['systolic','Верхнее'],['diastolic','Нижнее'],['pulse','Пульс'],['pressure','Верхнее + нижнее'],['combined','Верхнее + нижнее + пульс']];
+  function statisticsAverages(s){
+    return `<div class="card statistics-summary"><div class="segmented statistics-summary-modes" aria-label="Способ расчёта">${[['mean','Среднее'],['median','Медиана']].map(([value,label])=>`<button data-action="statistics-summary" data-value="${value}" class="${ui.statistics.summary===value?'active':''}" aria-pressed="${ui.statistics.summary===value}">${label}</button>`).join('')}</div>${claritySummaryMetrics(s)}</div>`;
+  }
+  function statisticsChart(w){
+    const id='statistics',metric=ui.statistics.chartMetric,keys=metric==='pressure'?['systolic','diastolic']:metric==='combined'?['systolic','diastolic','pulse']:[metric],points=M.statisticsChartPoints(w.items,'records');
+    chartData[id]={id,title:'Динамика',items:w.items,metric,keys,points,window:{from:w.from,until:w.until},phases:[],unit:metric==='pulse'?'уд/мин':metric==='combined'?'мм рт. ст. · уд/мин':'мм рт. ст.'};
+    const legend=keys.map(key=>`<span data-line="${key}"><i class="line-key"></i>${statisticsMetrics.find(m=>m[0]===key)[1]}</span>`).join('');
+    return `<section class="statistics-section statistics-chart-section"><div class="statistics-chart-heading"><h2 class="section-title">Динамика</h2><button class="statistics-chart-options" data-action="statistics-settings" aria-label="Выбрать показатели графика">${I('filter')}Показатели${I('chevronDown')}</button></div><div class="chart-card statistics-chart" data-metric="${metric}"><div class="chart-legend">${legend}</div><div class="chart-mount" data-chart="${id}"></div></div></section>`;
+  }
+
+  function statisticsExtremeRows(items){
+    const extremes=M.statisticsExtremes(items);
+    return `<div class="statistics-extremes"><div class="statistics-extreme-head"><span></span><span>Минимум</span><span>Максимум</span></div>${statisticsMetrics.map(([key,label,unit])=>`<div class="statistics-extreme-row" data-metric="${key}"><span>${label}<small>${unit}</small></span>${['min','max'].map(side=>{const p=extremes[key][side];return `<button data-action="detail" data-id="${p.id}" aria-label="${label}, ${side==='min'?'минимум':'максимум'} ${p.value}, ${full(p.measuredAt)}"><strong>${p.value}</strong><small class="statistics-extreme-date-time"><span>${date(p.measuredAt)}</span><span>${time(p.measuredAt)}</span></small></button>`;}).join('')}</div>`).join('')}</div>`;
+  }
+  function ensureStatisticsComparison(){
+    const s=ui.statistics,populated=state.phases.map(p=>({p,count:M.filter(state.sessions,{phase:p}).length})).sort((a,b)=>b.count-a.count);
+    if(!state.phases.some(p=>String(p.id)===s.left))s.left=populated[0]?String(populated[0].p.id):null;
+    if(!state.phases.some(p=>String(p.id)===s.right)&&populated.length>1)s.right=String((populated.find(p=>String(p.p.id)!==s.left)||populated[1]).p.id);
+    if(!s.leftDates||!s.rightDates){
+      const current=statisticsWindow({scope:'time',preset:'7'}),previous=current.previous;
+      s.leftDates={scope:'time',preset:'custom',from:local(previous.from).slice(0,10),to:local(previous.until-1).slice(0,10)};
+      s.rightDates={scope:'time',preset:'custom',from:local(current.from).slice(0,10),to:local(current.until-1).slice(0,10)};
+    }
+  }
+  function statisticsComparisonView(){
+    ensureStatisticsComparison();const s=ui.statistics;
+    const switcher=`<div class="segmented statistics-compare-type" aria-label="Что сравниваем">${[['phases','Периоды'],['dates','Диапазоны дат']].map(([value,label])=>`<button data-action="statistics-compare-type" data-value="${value}" class="${s.compareType===value?'active':''}" aria-pressed="${s.compareType===value}">${label}</button>`).join('')}</div>`;
+    if(s.compareType==='phases'&&state.phases.length<2)return switcher+`<div class="statistics-empty">${I('layers')}<strong>Нужны два периода</strong><p>Создайте ещё один период или сравните два диапазона дат.</p><button class="secondary" data-action="statistics-compare-type" data-value="dates">Сравнить даты</button></div>`;
+    const leftSelection=s.compareType==='phases'?{scope:s.left}:s.leftDates,rightSelection=s.compareType==='phases'?{scope:s.right}:s.rightDates;
+    const left=statisticsWindow(leftSelection),right=statisticsWindow(rightSelection),comparison=M.statisticsComparison(left.items,right.items);
+    const selection=`<div class="statistics-comparison-selectors"><div><span class="statistics-side-label">Первый</span>${statisticsRangeButton(leftSelection,'left')}</div><div><span class="statistics-side-label">Второй</span>${statisticsRangeButton(rightSelection,'right')}</div></div>`;
+    const values=`<section class="statistics-section"><h2 class="section-title">Средние и разница</h2><div class="card statistics-comparison"><div class="statistics-comparison-head"><span>Показатель</span><span>Первый</span><span>Второй</span></div>${statisticsMetrics.map(([key,label,unit])=>{const a=comparison.left,b=comparison.right,delta=comparison.delta?.[key];return `<div class="statistics-comparison-row" data-metric="${key}"><span>${label}<small>${unit}</small></span><strong>${a.count?num(a.averages[key],1):'—'}</strong><strong>${b.count?num(b.averages[key],1):'—'}</strong>${delta!==undefined?`<small class="statistics-comparison-delta">${delta===0?'Без изменений':(delta>0?'+':'−')+num(Math.abs(delta),1)+' '+(key==='wellbeing'?'балла':unit)}</small>`:''}</div>`;}).join('')}</div></section>`;
+    return switcher+selection+`<div class="statistics-comparison-counts"><span>${recs(left.items.length)} · ${measuredDays(left.days)}</span><span>${recs(right.items.length)} · ${measuredDays(right.days)}</span></div>`+(s.compareType==='phases'&&s.left===s.right?'<p class="statistics-notice">Выбран один и тот же период. Выберите другой для сравнения.</p>':comparison.shared?`<p class="statistics-notice">${I('layers')}Общих записей: ${comparison.shared}. Они учитываются в обеих выборках.</p>`:'')+values+'<p class="statistics-caption">Разница рассчитана по неокруглённым средним.</p>'+(!comparison.delta?'<p class="statistics-caption">Разница появится, когда в обеих выборках будут измерения.</p>':'')+`<div class="statistics-comparison-history"><button class="secondary" data-action="statistics-history" data-target="left">${I('history')}История первого</button><button class="secondary" data-action="statistics-history" data-target="right">${I('history')}История второго</button></div>`;
+  }
+  function clarityStatistics(){
+    const s=ui.statistics;
+    if(s.selection.scope!=='time'&&!state.phases.some(p=>String(p.id)===s.selection.scope))s.selection={scope:'time',preset:'7'};
+    if(s.tab==='comparison')return `<div class="clarity-statistics">${statisticsComparisonView()}</div>`;
+    const w=statisticsWindow(),average=M.statisticsSummary(w.items,s.summary);
+    return `<div class="clarity-statistics statistics-overview"><section class="statistics-section"><h2 class="section-title">${s.summary==='median'?'Медиана':'Среднее'} за период</h2>${statisticsAverages(average)}</section>${w.items.length?statisticsChart(w)+`<section class="statistics-section"><h2 class="section-title">Минимум и максимум</h2>${statisticsExtremeRows(w.items)}</section>`:`<div class="statistics-empty">${I('chart')}<strong>${state.sessions.length?'Нет измерений в этом интервале':'Статистика появится после измерений'}</strong><p>${state.sessions.length?'Выберите другие даты или период.':'Добавьте первую запись в дневник.'}</p><button class="secondary" data-action="${state.sessions.length?'statistics-preset':'new'}" ${state.sessions.length?'data-value="all"':''}>${state.sessions.length?'Показать всё':'Новое измерение'}</button></div>`}<div class="statistics-links"><button data-action="statistics-history" data-target="overview">${I('history')}<span>История измерений</span>${I('chevron')}</button></div></div>`;
+  }
+  function renderStatistics(){const scroll=$('app-content').scrollTop;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=scroll;}
+  function statisticsSettingsModal(){
+    modal={type:'statistics-settings',metric:ui.statistics.chartMetric};renderStatisticsSettingsModal();
+  }
+  function renderStatisticsSettingsModal(){
+    const sheet=$('modal').querySelector('.statistics-settings-sheet');
+    if(sheet){
+      sheet.classList.add('is-selecting');
+      sheet.querySelectorAll('[data-action="statistics-metric"]').forEach(button=>{
+        const selected=button.dataset.value===modal.metric;
+        button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
+      });
+      return;
+    }
+    const body=`<div class="statistics-chart-choices" aria-label="Показатели графика">${statisticsChartModes.map(([value,label])=>`<button data-action="statistics-metric" data-value="${value}" aria-pressed="${modal.metric===value}" class="${modal.metric===value?'active':''}"><span class="statistics-choice-lines" aria-hidden="true">${(value==='pressure'?['systolic','diastolic']:value==='combined'?['systolic','diastolic','pulse']:[value]).map(key=>`<i data-line="${key}"></i>`).join('')}</span><span>${label}</span>${I('check')}</button>`).join('')}</div>`;
+    showModal('Показатели графика',body,'<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="statistics-settings-apply">Готово</button>');
+    $('modal').querySelector('.sheet').classList.add('statistics-settings-sheet');
+  }
+  function statisticsRangeModal(target){
+    ensureStatisticsComparison();const s=ui.statistics;
+    const selection=target==='overview'?s.selection:s.compareType==='phases'?{scope:target==='left'?s.left:s.right}:target==='left'?s.leftDates:s.rightDates;
+    modal={type:'statistics-range',target,selection:M.clone(selection),calendar:null,wheelTimers:{}};
+    if(selection.scope==='time'&&selection.preset==='custom')setStatisticsCalendar('from');
+    renderStatisticsRangeModal();
+  }
+  function setStatisticsCalendar(field){
+    const value=modal.selection[field]||local(Date.now()).slice(0,10),d=new Date(value+'T12:00');
+    modal.calendar={field,day:value,month:new Date(d.getFullYear(),d.getMonth(),1)};
+  }
+  function statisticsWheelOptions(){
+    return modal.selection.scope==='time'?[...statisticsPresets,['custom','Свои даты']].map(([value,label])=>({value,label:value==='all'?'Все записи':['7','30','90'].includes(value)?'Последние '+value+' дней':label})):state.phases.map(p=>({value:String(p.id),label:p.title,appearance:kind(p)}));
+  }
+  function selectStatisticsWheel(index,redraw=true,alignWheel=true){
+    if(modal?.type!=='statistics-range')return;
+    const options=statisticsWheelOptions(),selectedIndex=Math.max(0,Math.min(options.length-1,index)),option=options[selectedIndex];if(!option)return;
+    const f=modal.selection;
+    if(option.value===(f.scope==='time'?f.preset:f.scope)){
+      if(alignWheel)$('modal').querySelector('.statistics-wheel').scrollTop=selectedIndex*48;
+      return;
+    }
+    modal.calendar=null;
+    if(f.scope==='time'){
+      f.preset=option.value;
+      if(f.preset==='custom'){
+        if(!f.from||!f.to){const w=statisticsWindow({scope:'time',preset:'7'});f.from=local(w.from).slice(0,10);f.to=local(w.until-1).slice(0,10);}
+        setStatisticsCalendar('from');
+      }
+    }else modal.selection={scope:option.value};
+    if(redraw)renderStatisticsRangeModal(alignWheel);
+  }
+  function updateStatisticsCalendar(){
+    const calendar=modal.calendar,f=modal.selection,mount=$('statistics-calendar');
+    const monthKey=calendar.month.getFullYear()+'-'+calendar.month.getMonth();
+    if(mount.dataset.month!==monthKey){
+      mount.innerHTML=calendarMarkup({...calendar,rangeFrom:f.from,rangeTo:f.to});mount.dataset.month=monthKey;
+    }else mount.querySelectorAll('.calendar-day').forEach(button=>{
+      const value=button.dataset.value,selected=value===calendar.day;
+      button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));
+      button.classList.toggle('in-range',!!(f.from&&f.to&&value>=f.from&&value<=f.to));
+      button.classList.toggle('range-edge',value===f.from||value===f.to);
+    });
+  }
+  function renderStatisticsRangeModal(alignWheel=true){
+    clearTimeout(modal.wheelTimers.interval);
+    const f=modal.selection,isOverview=modal.target==='overview',isTime=f.scope==='time',options=statisticsWheelOptions(),index=Math.max(0,options.findIndex(o=>o.value===(isTime?f.preset:f.scope)));
+    let error='',w=null;try{w=statisticsWindow(f);}catch(e){error=e.message;}
+    let sheet=$('modal').querySelector('.statistics-range-sheet');
+    const mounted=!sheet;
+    if(mounted){
+      const mode=isOverview?`<div class="segmented statistics-scope-tabs"><button data-action="statistics-range-scope" data-value="time">Даты</button><button data-action="statistics-range-scope" data-value="phase" ${state.phases.length?'':'disabled'}>Периоды</button></div>`:'';
+      const body=mode+`<div class="statistics-wheel-frame"><div class="statistics-wheel" role="listbox" tabindex="0"></div></div><div class="statistics-custom-range" hidden><div class="statistics-date-fields">${[['from','Начало'],['to','Завершение']].map(([field,label])=>`<button class="statistics-date-card" data-action="statistics-date" data-field="${field}" aria-label="${label} диапазона">${I('calendar')}<span>${label}</span><strong></strong></button>`).join('')}</div><div id="statistics-calendar" class="statistics-calendar"></div></div><div class="statistics-range-preview"><span></span><strong></strong></div><div class="error-box" role="alert"></div>`;
+      showModal('',body,'<button class="secondary" data-action="close-modal">Отмена</button><button class="measure-cta" data-action="statistics-range-apply">Применить</button>');
+      sheet=$('modal').querySelector('.sheet');sheet.classList.add('statistics-range-sheet');
+    }else sheet.classList.add('is-selecting');
+    $('sheet-title').textContent=isOverview?'Даты и периоды':'Выбор '+(modal.target==='left'?'первого':'второго')+' '+(isTime?'диапазона':'периода');
+    sheet.querySelectorAll('[data-action="statistics-range-scope"]').forEach(button=>{
+      const selected=(button.dataset.value==='time')===isTime;
+      button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
+    });
+    const wheel=sheet.querySelector('.statistics-wheel'),scope=isTime?'time':'phase',custom=isTime&&f.preset==='custom';
+    sheet.classList.toggle('custom-range',custom);
+    sheet.querySelector('.statistics-custom-range').hidden=!custom;
+    wheel.setAttribute('aria-label',isTime?'Интервал статистики':'Период наблюдения');
+    if(modal.wheelScope!==scope){
+      wheel.innerHTML=options.map((o,i)=>`<button role="option" aria-selected="false" data-action="statistics-wheel" data-index="${i}">${o.appearance?`<span style="color:${o.appearance.color}">${I(o.appearance.icon)}</span>`:''}<span>${esc(o.label)}</span></button>`).join('');
+      modal.wheelScope=scope;
+    }
+    wheel.querySelectorAll('button').forEach((button,i)=>{
+      button.classList.toggle('selected',i===index);button.setAttribute('aria-selected',String(i===index));
+    });
+    if(alignWheel)wheel.scrollTop=index*48;
+    if(custom){
+      sheet.querySelectorAll('[data-action="statistics-date"]').forEach(button=>{
+        const field=button.dataset.field,selected=modal.calendar?.field===field;
+        button.classList.toggle('active',selected);button.setAttribute('aria-expanded',String(selected));
+        button.querySelector('strong').textContent=f[field]?date(f[field]+'T12:00',{day:'numeric',month:'short',year:'numeric'}):'Выбрать';
+      });
+      if(modal.calendar)updateStatisticsCalendar();
+    }
+    const preview=sheet.querySelector('.statistics-range-preview');
+    preview.hidden=!w;preview.querySelector('span').textContent=w?statisticsDates(w):'';preview.querySelector('strong').textContent=w?recs(w.items.length):'';
+    sheet.querySelector('.error-box').textContent=error;sheet.querySelector('[data-action="statistics-range-apply"]').disabled=!!error;
+    if(mounted){
+      wheel.addEventListener('scroll',()=>{
+        if(modal?.type!=='statistics-range'||!wheel.isConnected)return;
+        clearTimeout(modal.wheelTimers.interval);
+        modal.wheelTimers.interval=setTimeout(()=>{if(wheel.isConnected)selectStatisticsWheel(Math.round(wheel.scrollTop/48),true,false);},100);
+      });
+      wheel.addEventListener('keydown',event=>{
+        if(!['ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(event.key))return;
+        event.preventDefault();const current=Math.round(wheel.scrollTop/48),step={ArrowUp:-1,ArrowDown:1,PageUp:-2,PageDown:2}[event.key];
+        selectStatisticsWheel(event.key==='Home'?0:event.key==='End'?statisticsWheelOptions().length-1:current+step);
+        wheel.focus({preventScroll:true});
+      });
+    }
+  }
+
+  function statisticsHistory(target){
+    const s=ui.statistics,selection=target==='overview'?s.selection:s.compareType==='phases'?{scope:target==='left'?s.left:s.right}:target==='left'?s.leftDates:s.rightDates;
+    const w=statisticsWindow(selection);
+    ui.filters={...defaultHistoryFilters(),...(w.phase?{phaseId:String(w.phase.id)}:selection.preset==='all'?{}:{from:local(w.from).slice(0,10),to:local(w.until-1).slice(0,10),interval:'custom'})};
+    ui.phaseHistory=false;ui.statisticsHistory=true;ui.limit=30;navigate('history');
+  }
   function phaseSummary(s){
     return s.count?`<div class="phase-card-summary"><div class="phase-card-metrics"><div class="phase-card-pressure"><span class="phase-card-metric-label">Давление</span><span class="phase-card-bp"><span class="bp-upper">${s.systolic}</span><span class="slash">/</span><span class="bp-lower">${s.diastolic}</span></span></div><div data-metric="pulse"><span class="phase-card-metric-label">Пульс</span><span class="phase-card-pulse"><strong>${s.pulse}</strong></span></div><div data-metric="wellbeing"><span class="phase-card-metric-label">Самочувствие</span><strong class="phase-card-wellbeing">${num(s.wellbeing,1)}</strong></div></div><p class="phase-card-summary-caption">Средние за период</p></div>`:'<p class="phase-card-no-readings">Измерений в периоде пока нет</p>';
   }
@@ -353,10 +569,15 @@
     }
     let actions='';
     if(ui.view==='history')actions=`<button class="icon-button history-filter-trigger ${theme==='clarity'&&activeHistoryFilterCount()?'has-filters':''}" data-action="filters" aria-label="Фильтры истории" ${theme==='clarity'&&activeHistoryFilterCount()?'aria-describedby="history-filter-count"':''}>${I('filter')}${theme==='clarity'&&activeHistoryFilterCount()?`<span class="history-filter-badge" aria-hidden="true">${activeHistoryFilterCount()}</span><span class="sr-only" id="history-filter-count">Выбрано фильтров: ${activeHistoryFilterCount()}</span>`:''}</button><button class="icon-button solid" data-action="new" aria-label="Добавить измерение">${I('plus')}</button>`;
+    else if(theme==='clarity'&&ui.view==='statistics')actions='';
     else if(top&&ui.view!=='home'&&ui.view!=='settings'&&ui.view!=='phases')actions=`<button class="icon-button" data-action="new" aria-label="Добавить измерение">${I('plus')}</button>`;
     else if(ui.view==='home'&&theme!=='clarity')actions=`<button class="icon-button" data-action="nav" data-view="settings" aria-label="Настройки">${I('settings')}</button>`;
     $('app-header').dataset.view=ui.view;
-    $('app-header').innerHTML=top?`<h1>${titles[ui.view]}</h1><div class="header-actions">${actions}</div>`:`<div class="header-back"><button class="icon-button back-button" data-action="back" aria-label="Назад">${I(theme==='clarity'?'backArrow':'back')}</button><h1>${titles[ui.view]}</h1></div>`;
+    const statisticsOverview=theme==='clarity'&&ui.view==='statistics'&&ui.statistics.tab==='overview';
+    $('app-header').classList.toggle('statistics-header',statisticsOverview);
+    if(statisticsOverview&&ui.statistics.selection.scope!=='time'&&!state.phases.some(p=>String(p.id)===ui.statistics.selection.scope))ui.statistics.selection={scope:'time',preset:'7'};
+    $('app-header').innerHTML=theme==='clarity'&&ui.view==='statistics'&&ui.statistics.tab==='comparison'?`<div class="header-back"><button class="icon-button back-button" data-action="statistics-tab" data-value="overview" aria-label="Назад к статистике">${I('backArrow')}</button><h1>Сравнение</h1></div>`:top?`<h1>${titles[ui.view]}</h1><div class="header-actions">${actions}</div>`:`<div class="header-back"><button class="icon-button back-button" data-action="back" aria-label="Назад">${I(theme==='clarity'?'backArrow':'back')}</button><h1>${titles[ui.view]}</h1></div>`;
+    if(statisticsOverview)$('app-header').innerHTML='<div class="statistics-header-top"><h1>Статистика</h1>'+statisticsHeaderRange()+'</div>'+statisticsContext();
     $('app-content').dataset.view=ui.view;
     $('app-content').innerHTML=({home,history:historyScreen,statistics,phases,settings,detail,phase:phaseDetail,entry}[ui.view]||home)();
     $('bottom-nav').hidden=!showNav;$('bottom-nav').style.display=showNav?'flex':'none';
@@ -383,22 +604,22 @@
     document.querySelectorAll('.chart-mount').forEach(mount=>{
       const data=chartData[mount.dataset.chart];if(!data||!data.points.length)return;
       const w=Math.max(200,Math.round(mount.clientWidth)),h=theme==='clarity'&&data.id==='home'?190:208,left=38,right=w-10,top=23,bottom=160,pts=data.points;
-      const keys=data.metric==='pressure'?['systolic','diastolic']:[data.metric];
+      const keys=data.keys||(data.metric==='pressure'?['systolic','diastolic']:[data.metric]);
       const values=pts.flatMap(p=>keys.map(k=>p[k]));
       const min=data.metric==='wellbeing'?1:Math.max(0,Math.floor((Math.min(...values)-10)/10)*10),max=data.metric==='wellbeing'?10:Math.max(min+40,Math.ceil((Math.max(...values)+10)/10)*10);
-      let from=data.window?.from??Date.parse(pts[0].measuredAt),until=data.window?.until??Date.parse(pts.at(-1).measuredAt);if(until<=from){from-=M.DAY/2;until+=M.DAY/2;}
-      const uniform=data.id==='home';const x=i=>left+(uniform?(pts.length===1?.5:i/(pts.length-1)):(Date.parse(pts[i].measuredAt)-from)/(until-from))*(right-left);const y=v=>bottom-(v-min)/(max-min)*(bottom-top);
+      let from=data.window?.from??Date.parse(pts[0].measuredAt),until=data.window?.until??Date.parse(pts.at(-1).measuredAt);if(data.id==='statistics')until-=1;if(until<=from){from-=M.DAY/2;until+=M.DAY/2;}
+      const uniform=['home','statistics'].includes(data.id);const x=i=>left+(uniform?(pts.length===1?.5:i/(pts.length-1)):(Date.parse(pts[i].measuredAt)-from)/(until-from))*(right-left);const y=v=>bottom-(v-min)/(max-min)*(bottom-top);
       const ticks=data.metric==='wellbeing'?[1,5,10]:[min,Math.round((min+max)/2),max];
       const bands=data.phases.filter(p=>Date.parse(p.startedAt)<=until&&(p.endedAt===null||Date.parse(p.endedAt)>from));
-      const hint=theme==='clarity'&&data.id==='home'?'Нажмите на точку, чтобы открыть измерение.':'Нажмите на точку или откройте таблицу.';
+      const hint=theme==='clarity'&&['home','statistics'].includes(data.id)?'Нажмите на точку, чтобы открыть измерения.':'Нажмите на точку или откройте таблицу.';
       let markup=`<svg class="chart-svg" viewBox="0 0 ${w} ${h}" role="group" aria-label="${esc(data.title)}, ${recs(data.items.length)}. ${hint}"><title>${esc(data.title)}</title>`;
       if(!uniform)bands.forEach(p=>{const start=Math.max(from,Date.parse(p.startedAt)),end=Math.min(until,p.endedAt===null?until:Date.parse(p.endedAt));const a=left+(start-from)/(until-from)*(right-left),b=left+(end-from)/(until-from)*(right-left);markup+=`<rect x="${a}" y="${top}" width="${Math.max(0,b-a)}" height="${bottom-top}" fill="${kind(p).color}" opacity=".08"/><rect x="${a}" y="${bottom+3}" width="${Math.max(1,b-a)}" height="3" fill="${kind(p).color}" opacity=".7"/>`;});
       ticks.forEach(v=>{markup+=`<path class="grid-line" d="M${left} ${y(v)}H${right}"/><text x="${left-8}" y="${y(v)+4}" text-anchor="end">${v}</text>`;});
-      keys.forEach((k,idx)=>{markup+=`<path class="plot-line ${idx?'second':''}" d="${pts.map((p,i)=>(i?'L':'M')+x(i).toFixed(2)+' '+y(p[k]).toFixed(2)).join(' ')}"/>`;pts.forEach((p,i)=>{markup+=`<circle class="point-dot ${idx?'second':''}" cx="${x(i)}" cy="${y(p[k])}" r="${pts.length>15?2:3}"/>`;});});
-      const labelCount=Math.min(4,pts.length);
-      for(let n=0;n<labelCount;n++){const i=labelCount===1?0:Math.round(n*(pts.length-1)/(labelCount-1));const t=uniform?Date.parse(pts[i].measuredAt):labelCount===1?Date.parse(pts[i].measuredAt):from+n*(until-from)/(labelCount-1);const xp=uniform?x(i):left+(t-from)/(until-from)*(right-left);markup+=`<text x="${xp}" y="186" text-anchor="${n===0?'start':n===labelCount-1?'end':'middle'}">${date(t,{day:'2-digit',month:'2-digit'})}</text>`;}
-      if(theme!=='clarity'||data.id!=='home')markup+=`<text x="${left}" y="12">${data.metric==='pressure'?'мм рт. ст.':data.metric==='pulse'?'уд/мин':'баллы'}</text>`;
-      pts.forEach((p,i)=>{const before=i===0?left:(x(i-1)+x(i))/2,after=i===pts.length-1?right:(x(i)+x(i+1))/2;markup+=`<rect class="chart-target" x="${Math.max(left,before)}" y="${top}" width="${Math.max(8,after-before)}" height="${bottom-top}" data-action="chart-point" data-chart="${data.id}" data-point="${i}" role="button" tabindex="0" aria-label="${esc(date(p.measuredAt))}: ${keys.map(k=>num(p[k],1)).join(', ')}"/>`;});
+      keys.forEach((k,idx)=>{markup+=`<path class="plot-line ${idx?'second':''} metric-${k}" d="${pts.map((p,i)=>(i?'L':'M')+x(i).toFixed(2)+' '+y(p[k]).toFixed(2)).join(' ')}"/>`;pts.forEach((p,i)=>{markup+=`<circle class="point-dot ${idx?'second':''} metric-${k}" cx="${x(i)}" cy="${y(p[k])}" r="${pts.length>15?2:3}"/>`;});});
+      const labelCount=Math.min(4,pts.length),sameDay=data.id==='statistics'&&local(pts[0].measuredAt).slice(0,10)===local(pts.at(-1).measuredAt).slice(0,10);
+      for(let n=0;n<labelCount;n++){const i=labelCount===1?0:Math.round(n*(pts.length-1)/(labelCount-1));const t=uniform?Date.parse(pts[i].measuredAt):labelCount===1?Date.parse(pts[i].measuredAt):from+n*(until-from)/(labelCount-1);let xp=uniform?x(i):left+(t-from)/(until-from)*(right-left);if(labelCount===1)xp=Math.min(right-18,Math.max(left+18,xp));markup+=`<text x="${xp}" y="186" text-anchor="${labelCount===1?'middle':n===0?'start':n===labelCount-1?'end':'middle'}">${sameDay?time(t):date(t,{day:'2-digit',month:'2-digit'})}</text>`;}
+      if(theme!=='clarity'||data.id!=='home')markup+=`<text x="${left}" y="12">${data.unit||(data.metric==='pressure'?'мм рт. ст.':data.metric==='pulse'?'уд/мин':'баллы')}</text>`;
+      pts.forEach((p,i)=>{const before=i===0?left:(x(i-1)+x(i))/2,after=i===pts.length-1?right:(x(i)+x(i+1))/2;markup+=`<rect class="chart-target" x="${Math.max(left,before)}" y="${top}" width="${Math.max(data.id==='statistics'?1:8,after-before)}" height="${bottom-top}" data-action="chart-point" data-chart="${data.id}" data-point="${i}" role="button" tabindex="0" aria-label="${esc(data.id==='statistics'?full(p.measuredAt):date(p.measuredAt))}: ${keys.map(k=>num(p[k],1)).join(', ')}"/>`;});
       markup+='</svg>';
       if(bands.length)markup+=`<div class="band-legend">${bands.map(p=>`<span><i style="background:${kind(p).color}"></i>${esc(p.title)}</span>`).join('')}</div>`;
       mount.innerHTML=markup;
@@ -435,7 +656,7 @@
     const cells=Math.ceil((offset+totalDays)/7)*7,today=local(Date.now()).slice(0,10);
     return `<div class="calendar-heading"><strong>${date(first,{month:'long',year:'numeric'})}</strong><div class="row"><button class="calendar-nav" data-action="calendar-month" data-step="-1" aria-label="Предыдущий месяц">${I('back')}</button><button class="calendar-nav" data-action="calendar-month" data-step="1" aria-label="Следующий месяц">${I('chevron')}</button></div></div><div class="calendar-weekdays" aria-hidden="true">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(day=>`<span>${day}</span>`).join('')}</div><div class="calendar-grid">${Array.from({length:cells},(_,i)=>{
       const day=new Date(year,month,i-offset+1),value=local(day).slice(0,10);
-      return `<button class="calendar-day ${day.getMonth()!==month?'outside':''} ${value===calendar.day?'selected':''} ${value===today?'today':''}" data-action="calendar-day" data-value="${value}" aria-label="${esc(date(day,{day:'numeric',month:'long',year:'numeric'}))}" aria-pressed="${value===calendar.day}" ${value===today?'aria-current="date"':''}>${day.getDate()}</button>`;
+      return `<button class="calendar-day ${day.getMonth()!==month?'outside':''} ${value===calendar.day?'selected':''} ${value===today?'today':''} ${calendar.rangeFrom&&calendar.rangeTo&&value>=calendar.rangeFrom&&value<=calendar.rangeTo?'in-range':''} ${value===calendar.rangeFrom||value===calendar.rangeTo?'range-edge':''}" data-action="calendar-day" data-value="${value}" aria-label="${esc(date(day,{day:'numeric',month:'long',year:'numeric'}))}" aria-pressed="${value===calendar.day}" ${value===today?'aria-current="date"':''}>${day.getDate()}</button>`;
     }).join('')}</div>`;
   }
   function timeWheel(field,count,label){
@@ -704,18 +925,41 @@
   function action(target){
     const a=target.dataset.action;
     switch(a){
-      case 'nav':if(target.dataset.view==='history')clearPhaseHistory();navigate(target.dataset.view);break;
+      case 'nav':if(target.dataset.view==='history')clearPhaseHistory();if(target.dataset.view==='statistics'){ui.statistics.tab='overview';ui.statistics.restoreScroll=false;}navigate(target.dataset.view);break;
       case 'phase-group-toggle':ui.phaseGroups[target.dataset.group]=!target.closest('details').open;break;
       case 'back':navigate(ui.view==='phase'?'phases':ui.view==='entry'?'home':ui.view==='detail'?ui.detailReturn:'history');break;
       case 'detail':closeModal();navigate('detail',+target.dataset.id);break;
       case 'phase':navigate('phase',+target.dataset.id);break;
-      case 'phase-history':ui.filters={...defaultHistoryFilters(),phaseId:target.dataset.id};ui.phaseHistory=true;ui.limit=30;navigate('history');break;
+      case 'phase-history':ui.filters={...defaultHistoryFilters(),phaseId:target.dataset.id};ui.phaseHistory=true;ui.statisticsHistory=false;ui.limit=30;navigate('history');break;
+      case 'statistics-tab':ui.statistics.tab=target.dataset.value;ui.statistics.restoreScroll=false;render();$('app-content').scrollTop=0;break;
+      case 'statistics-preset':ui.statistics.selection={scope:'time',preset:target.dataset.value};ui.statistics.restoreScroll=false;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=0;break;
+      case 'statistics-summary':ui.statistics.summary=target.dataset.value;renderStatistics();break;
+      case 'statistics-settings':statisticsSettingsModal();break;
+      case 'statistics-settings-apply':ui.statistics.chartMetric=modal.metric;closeModal();renderStatistics();break;
+      case 'statistics-metric':modal.metric=target.dataset.value;renderStatisticsSettingsModal();break;
+      case 'statistics-compare-type':ui.statistics.compareType=target.dataset.value;renderStatistics();break;
+      case 'statistics-history':statisticsHistory(target.dataset.target);break;
+      case 'statistics-range':statisticsRangeModal(target.dataset.target);break;
+      case 'statistics-range-scope':if((target.dataset.value==='time')===(modal.selection.scope==='time'))break;modal.calendar=null;modal.selection=target.dataset.value==='time'?{scope:'time',preset:'7'}:{scope:String(state.phases[0].id)};renderStatisticsRangeModal();break;
+      case 'statistics-wheel':selectStatisticsWheel(+target.dataset.index);break;
+      case 'statistics-date':{
+        setStatisticsCalendar(target.dataset.field);
+        renderStatisticsRangeModal();break;
+      }
+      case 'statistics-range-apply':{
+        const wheel=$('modal').querySelector('.statistics-wheel');if(wheel)selectStatisticsWheel(Math.round(wheel.scrollTop/48),false);
+        statisticsWindow(modal.selection);const {target:selectionTarget,selection}=modal,s=ui.statistics;
+        if(selectionTarget==='overview')s.selection=M.clone(selection);
+        else if(s.compareType==='phases')s[selectionTarget]=selection.scope;
+        else s[selectionTarget+'Dates']=M.clone(selection);
+        closeModal();ui.statistics.restoreScroll=false;delete ui.chartSelection.statistics;render();$('app-content').scrollTop=0;break;
+      }
       case 'new':ui.entry=M.resumeDraft(state);ui.readingValidation=false;navigate('entry');break;
       case 'resume-draft':{const draft=M.resumableDraft(state);if(draft&&persist(M.storeDraft(state,draft),false)){ui.entry=draft;ui.readingValidation=false;navigate('entry');}break;}
       case 'entry-datetime':entryDateTime(+target.dataset.index);break;
       case 'phase-datetime':phaseDateTime(target.dataset.field);break;
-      case 'calendar-month':{const calendar=modal.type==='filters'?modal.calendar:modal;calendar.month=new Date(calendar.month.getFullYear(),calendar.month.getMonth()+Number(target.dataset.step),1);updateCalendar();break;}
-      case 'calendar-day':if(modal.type==='filters')acceptHistoryFilterDate(target.dataset.value);else{modal.day=target.dataset.value;const day=new Date(modal.day+'T12:00');modal.month=new Date(day.getFullYear(),day.getMonth(),1);updateCalendar();}break;
+      case 'calendar-month':{const calendar=['filters','statistics-range'].includes(modal.type)?modal.calendar:modal;calendar.month=new Date(calendar.month.getFullYear(),calendar.month.getMonth()+Number(target.dataset.step),1);if(modal.type==='statistics-range')updateStatisticsCalendar();else updateCalendar();break;}
+      case 'calendar-day':if(modal.type==='statistics-range'){modal.selection[modal.calendar.field]=target.dataset.value;modal.calendar.day=target.dataset.value;const day=new Date(target.dataset.value+'T12:00');modal.calendar.month=new Date(day.getFullYear(),day.getMonth(),1);renderStatisticsRangeModal();}else if(modal.type==='filters')acceptHistoryFilterDate(target.dataset.value);else{modal.day=target.dataset.value;const day=new Date(modal.day+'T12:00');modal.month=new Date(day.getFullYear(),day.getMonth(),1);updateCalendar();}break;
       case 'calendar-today':{const today=new Date();if(modal.type==='filters')acceptHistoryFilterDate(local(today).slice(0,10));else{modal.day=local(today).slice(0,10);modal.month=new Date(today.getFullYear(),today.getMonth(),1);updateCalendar();}break;}
       case 'time-value':selectTimeValue(target.dataset.field,+target.dataset.value,true);break;
       case 'accept-datetime':{
@@ -737,7 +981,7 @@
       }
       case 'close-modal':closeModal();break;
       case 'filters':filtersModal();break;
-      case 'reset-filters':ui.filters=defaultHistoryFilters();ui.phaseHistory=false;ui.limit=30;render();break;
+      case 'reset-filters':ui.filters=defaultHistoryFilters();ui.phaseHistory=false;ui.statisticsHistory=false;ui.limit=30;render();break;
       case 'remove-history-filter':{
         const fields={dates:['from','to','interval'],mode:['mode'],phase:['phaseId'],wellbeing:['wellbeingMin','wellbeingMax'],tags:['tags'],note:['withNote'],sort:['sort']},defaults=defaultHistoryFilters();
         if(target.dataset.key==='phase')ui.phaseHistory=false;
@@ -759,7 +1003,7 @@
       case 'history-filter-sort-direction':{const key=$('filter-sort-key').value,direction=target.dataset.value;modal.filters.sort=key==='date'?(direction==='desc'?'newest':'oldest'):key+'-'+direction;updateHistoryFilterPreview();break;}
       case 'reset-filter-fields':if(theme==='clarity')resetHistoryFilterFields();else{$('filter-sort').value='newest';$('filter-from').value='';$('filter-to').value='';}break;
       case 'apply-filters':{
-        if(theme==='clarity'){readHistoryFilterFields();updateHistoryFilterPreview();const errors=historyFilterErrors(modal.filters);if(errors.dateError||errors.scoreError)break;if(modal.filters.phaseId!==ui.filters.phaseId)ui.phaseHistory=false;ui.filters=M.clone(modal.filters);}
+        if(theme==='clarity'){readHistoryFilterFields();updateHistoryFilterPreview();const errors=historyFilterErrors(modal.filters);if(errors.dateError||errors.scoreError)break;if(modal.filters.phaseId!==ui.filters.phaseId)ui.phaseHistory=false;if(['phaseId','from','to'].some(key=>modal.filters[key]!==ui.filters[key]))ui.statisticsHistory=false;ui.filters=M.clone(modal.filters);}
         else{const from=$('filter-from').value,to=$('filter-to').value;if(from&&to&&from>to){$('modal-error').textContent='Дата начала должна быть раньше даты окончания или совпадать с ней.';break;}ui.filters={sort:$('filter-sort').value,from,to};}
         ui.limit=30;closeModal();render();break;
       }
@@ -768,13 +1012,13 @@
       case 'metric':ui.metric=target.dataset.value;ui.chartSelection={};render();break;
       case 'chart-point':{
         const chart=target.dataset.chart,index=+target.dataset.point;
-        if(theme==='clarity'&&chart==='home'){
+        if(theme==='clarity'&&['home','statistics'].includes(chart)){
           const point=chartData[chart]?.points[index];if(point)navigate('detail',point.id);
         }else selectPoint(chart,index);
         break;
       }
       case 'chart-table':{const d=chartData[target.dataset.chart];modal={type:'records'};showModal('Значения графика',`<p>${esc(d.title)} · ${recs(d.items.length)}. Здесь показаны все измерения.</p>${M.filter(d.items).map(recordCard).join('')||empty('Нет данных','Выберите другой интервал.')}`);break;}
-      case 'point-records':{const d=chartData[target.dataset.chart],p=d.points[+target.dataset.point];if(p.count===1)navigate('detail',p.id);else {modal={type:'records'};showModal('Исходные записи',`<p>${date(p.from)} — ${date(p.to)}</p>${d.items.filter(s=>p.ids.includes(s.id)).map(recordCard).join('')}`);}break;}
+      case 'point-records':{const d=chartData[target.dataset.chart],p=d.points[+target.dataset.point];if(p.count===1)navigate('detail',p.id);else {modal={type:target.dataset.chart==='statistics'?'statistics-records':'records'};showModal('Исходные записи',`<p>${date(p.from)} — ${date(p.to)} · ${recs(p.count)}</p>${M.filter(d.items.filter(s=>p.ids.includes(s.id))).map(recordCard).join('')}`);if(modal.type==='statistics-records')$('modal').querySelector('.sheet').classList.add('statistics-records-sheet');}break;}
       case 'entry-mode':{const mode=target.dataset.value;if(mode===ui.entry.mode)break;const next=M.switchDraft(state,ui.entry,mode);if(persist(next,false)){ui.entry=M.resumeDraft(state);ui.error='';ui.readingValidation=false;render();}break;}
       case 'add-reading':if(ui.entry.readings.length<M.MAX_SERIES_READINGS){ui.entry.readings.push(newReading());saveDraft();render();}break;
       case 'remove-reading':{const before=M.clone(state);ui.entry.readings.splice(+target.dataset.index,1);saveDraft();ui.undo=before;render();toast('Замер удалён из черновика',true);break;}
