@@ -240,6 +240,18 @@ export async function clearMeasurements(db: SQLiteDatabase) {
   });
 }
 
+export async function resetDiaryData(db: SQLiteDatabase) {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM measurement_readings');
+    await db.runAsync('DELETE FROM measurement_sessions');
+    await db.runAsync('DELETE FROM experiment_phases');
+    await db.runAsync('DELETE FROM app_settings');
+    await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('measurement_sessions','measurement_readings','experiment_phases')");
+    // A reset diary must remain empty when initialization runs again.
+    await setSetting(db, 'initial_phases_seeded', 'yes');
+  });
+}
+
 type BackupSession = {
   id: number;
   measured_at: string;

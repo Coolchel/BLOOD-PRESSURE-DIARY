@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr, getLocale } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, {
   Circle,
@@ -63,33 +67,34 @@ function makeDomain(values: number[], metric: ChartMetric) {
 function formatAxisDate(iso: string) {
   const date = new Date(iso);
   return {
-    date: new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(date),
-    time: new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(date),
+    date: new Intl.DateTimeFormat(getLocale(), { day: '2-digit', month: '2-digit' }).format(date),
+    time: new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(date),
   };
 }
 
 export function WeeklyChart({
   measurements,
-  emptyMessage = 'Добавьте измерение, чтобы увидеть динамику',
+  emptyMessage = tr('Добавьте измерение, чтобы увидеть динамику'),
   metric = 'pressure',
   maxPoints,
   phases,
   pointSpacing = 'time',
   window,
 }: WeeklyChartProps) {
+  useLanguage();
   const { points, from, until, fraction, bands } = chartTimeline(measurements, phases, maxPoints, window);
   const series: Series[] =
     metric === 'pressure'
       ? [
           {
             key: 'systolic',
-            label: 'Систолическое',
+            label: tr('Систолическое'),
             color: Palette.coral,
             values: points.map((item) => item.systolic),
           },
           {
             key: 'diastolic',
-            label: 'Диастолическое',
+            label: tr('Диастолическое'),
             color: Palette.orange,
             values: points.map((item) => item.diastolic),
           },
@@ -98,7 +103,7 @@ export function WeeklyChart({
         ? [
             {
               key: 'pulse',
-              label: 'Пульс',
+              label: tr('Пульс'),
               color: '#6D78A8',
               values: points.map((item) => item.pulse),
             },
@@ -106,7 +111,7 @@ export function WeeklyChart({
         : [
             {
               key: 'wellbeing',
-              label: 'Самочувствие',
+              label: tr('Самочувствие'),
               color: '#E7A82F',
               values: points.map((item) => item.wellbeing),
             },
@@ -160,7 +165,7 @@ export function WeeklyChart({
       : from + position * (until - from) / (labelCount - 1);
     return { part: fraction(time), time };
   });
-  const unit = metric === 'pressure' ? 'мм' : metric === 'pulse' ? 'уд/м' : 'балл';
+  const unit = metric === 'pressure' ? tr('мм') : metric === 'pulse' ? tr('уд/м') : tr('балл');
 
   return (
     <View>
@@ -173,7 +178,7 @@ export function WeeklyChart({
         ))}
       </View>
       <Svg
-        accessibilityLabel={`График: ${series.map((item) => item.label).join(', ')}`}
+        accessibilityLabel={tr`График: ${series.map((item) => item.label).join(', ')}`}
         height={HEIGHT}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width="100%">

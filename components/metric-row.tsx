@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -15,12 +19,13 @@ type MetricRowProps = {
 };
 
 export function MetricRow({ icon, iconColor, label, value, unit, onPress, disabled }: MetricRowProps) {
+  useLanguage();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      accessibilityLabel={`${label}. ${value ?? 'Добавить'}`}
+      accessibilityLabel={`${label}. ${value ?? tr('Добавить')}`}
       onPress={onPress}
       style={({ pressed }) => [styles.row, disabled && { opacity: 0.5 }, pressed && styles.pressed]}>
       <View style={[styles.icon, { backgroundColor: `${iconColor}14` }]}>
@@ -31,7 +36,7 @@ export function MetricRow({ icon, iconColor, label, value, unit, onPress, disabl
         <Text style={styles.unit}>{unit}</Text>
       </View>
       <Text style={[styles.value, value === undefined && styles.placeholder]}>
-        {value ?? 'Добавить'}
+        {value ?? tr('Добавить')}
       </Text>
       <IconSymbol name="chevron.right" size={18} color={Palette.subtle} />
     </Pressable>

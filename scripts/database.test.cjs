@@ -10,15 +10,28 @@ const root = path.resolve(__dirname, '..');
 const modules = new Map();
 const files = new Map();
 let failFileWrite = false;
-const documentDirectory = { list: () => [...files.keys()].map((name) => new FakeFile(documentDirectory, name)) };
+let failFileDelete = false;
+const documentDirectory = { uri:'file:///documents/', list: () => [...files.keys()].filter(name=>!name.includes('::')).map((name) => new FakeFile(documentDirectory, name)) };
 class FakeFile {
-  constructor(directory, name) { this.name = name; }
+  constructor(directory, name) {
+    this.name = name;
+    this.key = directory.uri === documentDirectory.uri ? name : directory.uri+'::'+name;
+    this.uri = directory.uri+'/'+name;
+  }
+  get exists() { return files.has(this.key); }
+  async text() { if(!this.exists)throw Error('missing file');return files.get(this.key); }
   write(value) {
     if (failFileWrite) throw new Error('simulated file write failure');
-    files.set(this.name, value);
+    files.set(this.key, value);
   }
-  delete() { files.delete(this.name); }
+  delete() { if(failFileDelete)throw Error('simulated delete failure');files.delete(this.key); }
 }
+class FakeDirectory {
+  constructor(uri) { this.uri=uri; }
+  list() { return [...files.keys()].filter(key=>key.startsWith(this.uri+'::')).map(key=>new FakeFile(this,key.slice(this.uri.length+2))); }
+  createFile(name) { const file=new FakeFile(this,name);if(file.exists)throw Error('already exists');files.set(file.key,'');return file; }
+}
+const cacheDirectory=new FakeDirectory('file:///cache/');
 function loadTS(relativePath) {
   const filename = path.resolve(root, relativePath);
   if (modules.has(filename)) return modules.get(filename).exports;
@@ -28,11 +41,16 @@ function loadTS(relativePath) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const localRequire = (name) => {
-    if (name === 'expo-file-system') return { File: FakeFile, Paths: { document: documentDirectory } };
-    if (name === 'react-native') return { Text: 'Text', View: 'View', StyleSheet: { create: (styles) => styles } };
+    if (name === '@/localization/provider') return { useLanguage: () => ({ language: 'ru' }) };
+    if (name === '@/localization') return loadTS('localization/index.ts');
+    if (name.startsWith('../design-lab/')) return require(path.resolve(path.dirname(filename), name));
+    if (name === 'expo-file-system') return { File: FakeFile, Directory:FakeDirectory, Paths: { document: documentDirectory, cache:cacheDirectory } };
+    if (name === 'expo-modules-core') return {requireOptionalNativeModule:()=>null};
+    if (name === 'react-native') return { Platform:{OS:'android'}, Text: 'Text', View: 'View', StyleSheet: { create: (styles) => styles } };
     if (name === 'react-native-svg') return Object.fromEntries([
       ['__esModule', true], ['default', 'Svg'], ...['Circle', 'Defs', 'G', 'LinearGradient', 'Line', 'Path', 'Rect', 'Stop', 'Text'].map((key) => [key, key]),
     ]);
+    if(name==='@/modules/diary-backup')return loadTS('modules/diary-backup/index.ts');
     return name.startsWith('@/') ? loadTS(`${name.slice(2)}.ts`) : require(name);
   };
   new Function('exports', 'require', 'module', code)(module.exports, localRequire, module);
@@ -40,11 +58,30 @@ function loadTS(relativePath) {
 }
 
 const api = loadTS('data/database.ts');
+const { appLocale } = loadTS('localization/index.ts');
+appLocale.setLanguage('ru');
+const { loadAppLanguage, saveAppLanguage, LANGUAGE_SETTING } = loadTS('localization/preferences.ts');
 const { measurementStats } = loadTS('constants/measurement-stats.ts');
 const { cleanBaseline } = loadTS('constants/phase-format.ts');
 const { findPhaseFor } = loadTS('types/experiment.ts');
 const { savePhase, removePhase } = loadTS('data/phase-actions.ts');
-const { setAutoBackupEnabled } = loadTS('data/auto-backup.ts');
+const { setAutoBackupEnabled, runAutoBackup, getLastAutoBackupAt, getBackupLocation, getBackupError,
+  readStoredBackup, changeBackupLocation, factoryResetDiary, BackupDestinationExistsError, BACKUP_INTERVAL_MS } = loadTS('data/auto-backup.ts');
+const { backupFacts } = loadTS('data/backup-info.ts');
+const { hasBackupFile } = loadTS('data/backup-storage.ts');
+
+test('opening a native backup folder checks file presence without parsing its possibly corrupt JSON', async t => {
+  files.clear(); t.after(() => files.clear());
+  const defaultFolder = { kind: 'default', label: 'Default' };
+  const external = { kind: 'android', uri: 'content://backup-folder', label: 'External' };
+  assert.equal(await hasBackupFile(defaultFolder), false);
+  assert.equal(await hasBackupFile(external), false);
+  files.set('davlenie-autobackup.json', 'broken JSON');
+  files.set(external.uri + '::davlenie-autobackup.json', 'also broken');
+  assert.equal(await hasBackupFile(defaultFolder), true);
+  assert.equal(await hasBackupFile(external), true);
+  assert.equal(await hasBackupFile({ ...external, uri: 'content://other-folder' }), false);
+});
 const { DEFAULT_HISTORY_FILTERS, historyQuery } = loadTS('constants/history-filters.ts');
 const { chartTimeline } = loadTS('constants/chart-data.ts');
 const { statisticsWindow, measurementsInWindow, statisticsForPhase } = loadTS('constants/statistics-data.ts');
@@ -85,6 +122,99 @@ async function snapshot(db) {
   const { exportedAt, ...content } = await api.buildBackupPayload(db);
   return content;
 }
+
+test('native first launch uses the system language and unsupported locales use English without writing preferences', async t => {
+  const db = await fixture(t);
+  for (const [locale, language] of [['ru-RU', 'ru'], ['en-US', 'en'], ['fr-CA', 'fr'], ['es-MX', 'es'], ['de-CH', 'de'], ['it-IT', 'en']]) {
+    assert.deepEqual(await loadAppLanguage(db, locale), { language, manual: false });
+  }
+  assert.equal(await api.getSetting(db, LANGUAGE_SETTING), null);
+});
+
+test('native explicit language survives reopening and import without changing diary content or backups', async t => {
+  const db = await fixture(t);
+  await api.addMeasurement(db, { ...draft(), note: 'Настройки', tags: ['После кофе'] });
+  const before = await snapshot(db);
+  for (const language of ['ru', 'en', 'fr', 'es', 'de']) {
+    await saveAppLanguage(db, language);
+    await api.initializeDatabase(db);
+    assert.deepEqual(await loadAppLanguage(db, 'it-IT'), { language, manual: true });
+    assert.deepEqual(await snapshot(db), before);
+  }
+  const payload = await api.buildBackupPayload(db);
+  await api.restoreBackup(db, payload);
+  assert.deepEqual(await loadAppLanguage(db, 'ru-RU'), { language: 'de', manual: true });
+});
+
+test('native invalid settings recover from the system; failed or unsupported writes preserve the old choice', async t => {
+  const db = await fixture(t);
+  for (const value of ['broken', '{"version":2,"language":"fr"}', '{"version":1,"language":"it"}']) {
+    await api.setSetting(db, LANGUAGE_SETTING, value);
+    assert.deepEqual(await loadAppLanguage(db, 'de-DE'), { language: 'de', manual: false });
+  }
+  await saveAppLanguage(db, 'es');
+  await assert.rejects(() => saveAppLanguage(db, 'it'), /Unsupported language/);
+  await assert.rejects(() => saveAppLanguage({ ...db, runAsync: async () => { throw Error('disk full'); } }, 'fr'), /disk full/);
+  assert.deepEqual(await loadAppLanguage(db, 'en-US'), { language: 'es', manual: true });
+});
+
+test('native factory reset clears the manual language so the next launch follows the system', async t => {
+  files.clear(); t.after(() => files.clear());
+  const db = await fixture(t);
+  await saveAppLanguage(db, 'de');
+  await factoryResetDiary(db);
+  assert.deepEqual(await loadAppLanguage(db, 'fr-FR'), { language: 'fr', manual: false });
+  assert.deepEqual(await loadAppLanguage(db, 'ja-JP'), { language: 'en', manual: false });
+});
+
+test('factory reset removes records, phases, drafts and all managed copies without reseeding',async t=>{
+  files.clear();t.after(()=>files.clear());const db=await fixture(t);
+  await api.addMeasurement(db,draft(10,[reading(),reading()]));
+  await api.setSetting(db,'entry_draft','private draft');
+  await runAutoBackup(db,Date.parse(iso(10)));
+  const location={kind:'android',uri:'content://folder/reset',label:'Reset'};
+  await changeBackupLocation(db,location);
+  files.set('davlenie-autobackup-2026-09-01.json','old bytes');files.set('unrelated.json','keep');
+  files.set(cacheDirectory.uri+'::davlenie-export-2026-09-01.xlsx','private export');
+  files.set(cacheDirectory.uri+'::'+ 'davlenie-autobackup.json','cached copy');
+  await factoryResetDiary(db);
+  assert.equal(await api.countMeasurements(db),0);assert.deepEqual(await api.getPhases(db),[]);
+  assert.equal(await api.getSetting(db,'entry_draft'),null);assert.equal(await getLastAutoBackupAt(db),null);
+  assert.equal((await getBackupLocation(db)).kind,'default');assert.equal(await readStoredBackup(db),null);
+  assert.deepEqual([...files],[['unrelated.json','keep']]);
+  await api.initializeDatabase(db);assert.deepEqual(await api.getPhases(db),[]);
+  assert.equal(await runAutoBackup(db,Date.parse(iso(12))),'empty');
+  await api.addMeasurement(db,draft());assert.equal((await api.getMeasurements(db))[0].id,1);
+});
+
+test('factory reset rolls back database and copy bytes when its database transaction fails',async t=>{
+  files.clear();t.after(()=>files.clear());const db=await fixture(t);
+  await api.addMeasurement(db,draft());await runAutoBackup(db,Date.parse(iso(10)));
+  const before=await snapshot(db),savedFiles=[...files];
+  const broken={...db,runAsync:async(sql,...args)=>{if(sql==='DELETE FROM app_settings')throw Error('database busy');return db.runAsync(sql,...args);}};
+  await assert.rejects(factoryResetDiary(broken),/database busy/);
+  assert.deepEqual(await snapshot(db),before);assert.deepEqual([...files],savedFiles);
+});
+
+test('factory reset keeps diary data when the backup cannot be deleted and waits for queued writes',async t=>{
+  files.clear();t.after(()=>{files.clear();failFileDelete=false;});const db=await fixture(t);
+  await api.addMeasurement(db,draft());await runAutoBackup(db,Date.parse(iso(10)));
+  const before=await snapshot(db);failFileDelete=true;
+  await assert.rejects(factoryResetDiary(db),/delete failure/);assert.deepEqual(await snapshot(db),before);
+  failFileDelete=false;
+  await Promise.all([runAutoBackup(db,Date.parse(iso(12))),factoryResetDiary(db),runAutoBackup(db,Date.parse(iso(13)))]);
+  assert.equal(await readStoredBackup(db),null);assert.equal(files.size,0);assert.equal(await api.countMeasurements(db),0);
+});
+
+test('saved-copy facts use snapshot contents after later journal changes',async t=>{
+  files.clear();t.after(()=>files.clear());const db=await fixture(t);
+  await api.addMeasurement(db,draft(10,[reading(),reading()]));await api.addMeasurement(db,draft(11));
+  await runAutoBackup(db,Date.parse(iso(12)));const copy=await readStoredBackup(db),facts=backupFacts(copy);
+  await api.addMeasurement(db,draft(13));await api.clearMeasurements(db);
+  assert.equal(facts.records,2);assert.equal(facts.readings,3);assert.equal(facts.series,1);assert.equal(facts.days,2);
+  assert.equal(facts.periods,copy.phases.length);assert.equal(facts.at.toISOString(),iso(12));
+  assert.throws(()=>backupFacts({app:'Давление',exportedAt:'invalid',sessions:[],readings:[]}),/прочитать/);
+});
 
 test('history can reveal all 450 records, including equal timestamps, with the full count', async (t) => {
   const db = await fixture(t);
@@ -276,19 +406,26 @@ test('period summaries, detail data, exports and baseline retain unrounded means
   assert.equal((await api.getMeasurementById(db, 1)).averages.systolic, 120.5);
 });
 
-test('editor actions update the JSON copy after creating, editing and deleting periods', async (t) => {
+test('period actions leave the saved JSON untouched until the next eligible opening', async (t) => {
   const db = await fixture(t);
   files.clear();
   await api.addMeasurement(db, draft());
+  const opened=Date.parse('2026-10-10T23:50:00Z');
+  assert.equal(await runAutoBackup(db,opened),'written');
   const copied = () => JSON.parse(files.get('davlenie-autobackup.json'));
   await savePhase(db, phase(1));
-  assert.equal(copied().phases.length, 1);
+  assert.equal(copied().phases.length, 0);
   const id = (await api.getPhases(db))[0].id;
   await savePhase(db, { ...phase(1), title: 'edited' }, id);
-  assert.equal(copied().phases[0].title, 'edited');
+  assert.equal(await runAutoBackup(db,opened+BACKUP_INTERVAL_MS-1),'recent');
+  assert.equal(copied().phases.length,0);
+  assert.equal(await runAutoBackup(db,opened+BACKUP_INTERVAL_MS),'written');
+  assert.equal(copied().phases[0].title,'edited');
+  const before=files.get('davlenie-autobackup.json');
   await removePhase(db, id);
-  assert.deepEqual(copied().phases, []);
+  assert.equal(files.get('davlenie-autobackup.json'),before);
   assert.equal(copied().sessions.length, 1);
+  assert.equal(files.size,1);
   await api.initializeDatabase(db);
   assert.deepEqual(await api.getPhases(db), []);
 });
@@ -316,6 +453,181 @@ test('a copy failure does not prevent a period from being saved', async (t) => {
     console.error = originalConsoleError;
   }
   assert.equal((await api.getPhases(db)).length, 1);
+});
+
+test('one automatic JSON updates exactly after 24 hours, survives reload and ignores clock rollback', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const first=Date.parse('2026-10-10T23:59:00Z');
+  assert.equal(await runAutoBackup(db,first),'written');
+  const before=files.get('davlenie-autobackup.json');
+  await api.addMeasurement(db,draft(11));
+  await api.initializeDatabase(db);
+  assert.equal(await runAutoBackup(db,first+60*1000),'recent');
+  assert.equal(await runAutoBackup(db,first-60*1000),'recent');
+  assert.equal(await runAutoBackup(db,first+BACKUP_INTERVAL_MS-1),'recent');
+  assert.equal(files.get('davlenie-autobackup.json'),before);
+  assert.equal(await runAutoBackup(db,first+BACKUP_INTERVAL_MS),'written');
+  assert.equal((await readStoredBackup(db)).sessions.length,2);
+  assert.equal(files.size,1);
+  assert.equal((await getLastAutoBackupAt(db)).getTime(),first+BACKUP_INTERVAL_MS);
+});
+
+test('simultaneous openings create one copy and pass the gate only once', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const first=Date.parse('2026-10-10T12:00:00Z');
+  assert.deepEqual(await Promise.all([runAutoBackup(db,first),runAutoBackup(db,first)]),['written','recent']);
+  assert.equal(files.size,1);
+});
+
+test('disabled and empty diaries preserve the only copy and do not advance the timer', async (t) => {
+  const db=await fixture(t);files.clear();const first=Date.parse('2026-10-10T12:00:00Z');
+  assert.equal(await runAutoBackup(db,first),'empty');assert.equal(files.size,0);
+  await api.addMeasurement(db,draft());await runAutoBackup(db,first);
+  const before=files.get('davlenie-autobackup.json');
+  await setAutoBackupEnabled(db,false);
+  assert.equal(await runAutoBackup(db,first+BACKUP_INTERVAL_MS),'disabled');
+  await setAutoBackupEnabled(db,true);
+  assert.equal(files.get('davlenie-autobackup.json'),before);
+  await api.clearMeasurements(db);
+  assert.equal(await runAutoBackup(db,first+BACKUP_INTERVAL_MS),'empty');
+  assert.equal(files.get('davlenie-autobackup.json'),before);
+  assert.equal((await getLastAutoBackupAt(db)).getTime(),first);
+});
+
+test('failed writes preserve the copy and timestamp, and the next opening can retry', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const first=Date.parse('2026-10-10T12:00:00Z');await runAutoBackup(db,first);
+  const before=files.get('davlenie-autobackup.json');
+  await api.addMeasurement(db,draft(11));failFileWrite=true;
+  t.after(()=>{failFileWrite=false;});
+  assert.equal(await runAutoBackup(db,first+BACKUP_INTERVAL_MS),'failed');
+  assert.equal(files.get('davlenie-autobackup.json'),before);
+  assert.equal((await getLastAutoBackupAt(db)).getTime(),first);
+  assert.ok(await getBackupError(db));
+  failFileWrite=false;
+  assert.equal(await runAutoBackup(db,first+BACKUP_INTERVAL_MS+1),'written');
+  assert.equal((await readStoredBackup(db)).sessions.length,2);
+  assert.equal(await getBackupError(db),'');
+});
+
+test('a failed schedule write rolls the file back before the next opening retries', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const first=Date.parse('2026-10-10T12:00:00Z');await runAutoBackup(db,first);
+  const before=files.get('davlenie-autobackup.json');await api.addMeasurement(db,draft(11));
+  const run=db.runAsync;let fail=true;
+  db.runAsync=async(sql,...args)=>{
+    if(args[0]==='auto_backup_last_run'&&fail){fail=false;throw Error('settings write failed');}
+    return run(sql,...args);
+  };
+  assert.equal(await runAutoBackup(db,first+BACKUP_INTERVAL_MS),'failed');
+  assert.equal(files.get('davlenie-autobackup.json'),before);
+  assert.equal((await getLastAutoBackupAt(db)).getTime(),first);
+  assert.equal(await runAutoBackup(db,first+BACKUP_INTERVAL_MS+1),'written');
+  assert.equal((await readStoredBackup(db)).sessions.length,2);
+});
+
+test('reselecting the same iOS folder renews its bookmark without reading or updating the copy', async (t) => {
+  const db=await fixture(t);files.clear();
+  const source={kind:'ios',uri:'file:///selected/Diary/',label:'Дневник',bookmark:'expired'};
+  const fresh={...source,uri:'file:///selected/Diary',bookmark:'renewed'};
+  await api.setSetting(db,'auto_backup_location',JSON.stringify(source));
+  await api.setSetting(db,'auto_backup_last_run','2026-10-10T12:00:00.000Z');
+  await api.setSetting(db,'auto_backup_error','old access error');
+  await changeBackupLocation(db,fresh);
+  assert.deepEqual(await getBackupLocation(db),fresh);
+  assert.equal((await getLastAutoBackupAt(db)).toISOString(),'2026-10-10T12:00:00.000Z');
+  assert.equal(await getBackupError(db),'');assert.equal(files.size,0);
+});
+
+test('changing the backup folder moves one snapshot and preserves its 24-hour timestamp', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const first=Date.parse('2026-10-10T12:00:00Z');await runAutoBackup(db,first);
+  const before=files.get('davlenie-autobackup.json'),records=await snapshot(db);
+  const destination={kind:'android',uri:'content://documents/tree/primary%3ADiary',label:'Документы / Дневник'};
+  await changeBackupLocation(db,destination);
+  assert.equal(files.size,1);assert.equal(files.has('davlenie-autobackup.json'),false);
+  assert.equal(files.get(destination.uri+'::davlenie-autobackup.json'),before);
+  await api.initializeDatabase(db);assert.deepEqual(await getBackupLocation(db),destination);
+  assert.equal((await getLastAutoBackupAt(db)).getTime(),first);
+  assert.equal(await runAutoBackup(db,first+1),'recent');
+  assert.deepEqual(await snapshot(db),records);
+  await api.clearMeasurements(db);
+  const restored=await api.restoreBackup(db,await readStoredBackup(db));
+  assert.equal(restored.sessions,1);
+});
+
+test('a destination copy is preserved until explicit replacement and unrelated files survive', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  await runAutoBackup(db,Date.parse('2026-10-10T12:00:00Z'));
+  const source=files.get('davlenie-autobackup.json');
+  const destination={kind:'android',uri:'content://documents/tree/Diary',label:'Дневник'};
+  files.set(destination.uri+'::davlenie-autobackup.json','existing backup');
+  files.set(destination.uri+'::important.json','unrelated');
+  await assert.rejects(changeBackupLocation(db,destination),BackupDestinationExistsError);
+  assert.equal(files.get('davlenie-autobackup.json'),source);
+  assert.equal(files.get(destination.uri+'::davlenie-autobackup.json'),'existing backup');
+  assert.equal((await getBackupLocation(db)).kind,'default');
+  await changeBackupLocation(db,destination,true);
+  assert.equal(files.has('davlenie-autobackup.json'),false);
+  assert.equal(files.get(destination.uri+'::davlenie-autobackup.json'),source);
+  assert.equal(files.get(destination.uri+'::important.json'),'unrelated');
+});
+
+test('a failed folder move preserves the source copy, folder and schedule', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const first=Date.parse('2026-10-10T12:00:00Z');await runAutoBackup(db,first);
+  const source=files.get('davlenie-autobackup.json');
+  const destination={kind:'android',uri:'content://documents/tree/Diary',label:'Дневник'};
+  failFileWrite=true;t.after(()=>{failFileWrite=false;});
+  await assert.rejects(changeBackupLocation(db,destination));
+  failFileWrite=false;
+  assert.equal(files.size,1);assert.equal(files.get('davlenie-autobackup.json'),source);
+  assert.equal((await getBackupLocation(db)).kind,'default');
+  assert.equal((await getLastAutoBackupAt(db)).getTime(),first);
+});
+
+test('a failed folder setting rolls back a completed file move', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const first=Date.parse('2026-10-10T12:00:00Z');await runAutoBackup(db,first);
+  const before=files.get('davlenie-autobackup.json');
+  const destination={kind:'android',uri:'content://documents/tree/Diary',label:'Дневник'};
+  const run=db.runAsync;let fail=true;
+  db.runAsync=async(sql,...args)=>{
+    if(args[0]==='auto_backup_location'&&fail){fail=false;throw Error('settings write failed');}
+    return run(sql,...args);
+  };
+  await assert.rejects(changeBackupLocation(db,destination));
+  assert.equal(files.size,1);assert.equal(files.get('davlenie-autobackup.json'),before);
+  assert.equal((await getBackupLocation(db)).kind,'default');
+  assert.equal((await getLastAutoBackupAt(db)).getTime(),first);
+});
+
+test('legacy copies retain the newest dated file when the current file is missing and backup is off', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const older=JSON.stringify({...await api.buildBackupPayload(db),exportedAt:'2026-10-09T12:00:00.000Z'});
+  await api.addMeasurement(db,draft(11));
+  const latest=JSON.stringify({...await api.buildBackupPayload(db),exportedAt:'2026-10-10T12:00:00.000Z'});
+  files.set('davlenie-autobackup-2026-10-09.json',older);
+  files.set('davlenie-autobackup-2026-10-10.json',latest);
+  files.set('unrelated.json','keep');await setAutoBackupEnabled(db,false);
+  assert.equal(await runAutoBackup(db,Date.parse('2026-10-12T12:00:00Z')),'disabled');
+  assert.equal(files.size,2);assert.equal(files.get('davlenie-autobackup.json'),latest);
+  assert.equal(files.get('unrelated.json'),'keep');
+  assert.equal((await getLastAutoBackupAt(db)).toISOString(),'2026-10-10T12:00:00.000Z');
+  assert.equal((await api.getMeasurements(db,-1)).length,2);
+});
+
+test('legacy daily copies consolidate without refreshing a recent snapshot or deleting unrelated JSON', async (t) => {
+  const db=await fixture(t);files.clear();await api.addMeasurement(db,draft());
+  const first=Date.parse('2026-10-10T12:00:00Z');await runAutoBackup(db,first);
+  const source=files.get('davlenie-autobackup.json');
+  files.set('davlenie-autobackup-2026-10-09.json',source);
+  files.set('davlenie-autobackup-2026-10-10.json',source);
+  files.set('davlenie-autobackup-notes.json','unrelated');
+  assert.equal(await runAutoBackup(db,first+1),'recent');
+  assert.equal(files.size,2);assert.equal(files.get('davlenie-autobackup.json'),source);
+  assert.equal(files.get('davlenie-autobackup-notes.json'),'unrelated');
+  assert.equal((await getLastAutoBackupAt(db)).getTime(),first);
 });
 
 test('history supports both date orders and high/low sorting independently for all three metrics', async (t) => {

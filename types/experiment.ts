@@ -1,3 +1,5 @@
+import { tr } from '@/localization';
+
 export type PhaseKind = 'clean' | 'coffee' | 'energy' | 'alcohol' | 'mixed';
 
 export type ExperimentPhase = {
@@ -65,7 +67,8 @@ export const PHASE_KINDS: {
 ];
 
 export function phaseKindInfo(kind: PhaseKind) {
-  return PHASE_KINDS.find((item) => item.kind === kind) ?? PHASE_KINDS[0];
+  const info = PHASE_KINDS.find((item) => item.kind === kind) ?? PHASE_KINDS[0];
+  return { ...info, label: tr(info.label), hint: tr(info.hint) };
 }
 
 /** Измерение принадлежит периоду, если попало в его интервал; открытый период не имеет конца. */

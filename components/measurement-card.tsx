@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr, getLocale, formatNumber } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -13,7 +17,7 @@ type MeasurementCardProps = {
 };
 
 function formatDate(iso: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
+  return new Intl.DateTimeFormat(getLocale(), {
     day: 'numeric',
     month: 'long',
     hour: '2-digit',
@@ -22,11 +26,12 @@ function formatDate(iso: string) {
 }
 
 export function MeasurementCard({ measurement, phase, onPress }: MeasurementCardProps) {
+  useLanguage();
   const phaseInfo = phase ? phaseKindInfo(phase.kind) : null;
 
   return (
     <Pressable
-      accessibilityHint={onPress ? 'Открывает подробности измерения' : undefined}
+      accessibilityHint={onPress ? tr('Открывает подробности измерения') : undefined}
       accessibilityRole={onPress ? 'button' : undefined}
       disabled={!onPress}
       onPress={onPress}
@@ -37,13 +42,13 @@ export function MeasurementCard({ measurement, phase, onPress }: MeasurementCard
           <Text style={styles.separator}>/</Text>
           <Text style={styles.diastolic}>{measurement.diastolic}</Text>
         </View>
-        <Text style={styles.pressureUnit}>мм рт. ст.</Text>
+        <Text style={styles.pressureUnit}>{tr("мм рт. ст.")}</Text>
       </View>
       <View style={styles.details}>
         <View style={styles.detailRow}>
           <IconSymbol name="waveform.path.ecg" size={18} color={Palette.coral} />
           <Text style={styles.detailStrong}>{measurement.pulse}</Text>
-          <Text style={styles.detailMuted}>уд/мин</Text>
+          <Text style={styles.detailMuted}>{tr("уд/мин")}</Text>
         </View>
         <Text style={styles.date}>{formatDate(measurement.measuredAt)}</Text>
         <View style={styles.badges}>
@@ -54,11 +59,11 @@ export function MeasurementCard({ measurement, phase, onPress }: MeasurementCard
             </View>
           ) : null}
           <View style={styles.wellbeing}>
-            <Text style={styles.wellbeingText}>Самочувствие {measurement.wellbeing}/10</Text>
+            <Text style={styles.wellbeingText}>{tr("Самочувствие ")}{formatNumber(measurement.wellbeing, 1)}/10</Text>
           </View>
           {measurement.readingCount > 1 ? (
             <View style={styles.series}>
-              <Text style={styles.seriesText}>Среднее из {measurement.readingCount}</Text>
+              <Text style={styles.seriesText}>{tr("Среднее из ")}{measurement.readingCount}</Text>
             </View>
           ) : null}
         </View>

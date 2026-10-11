@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr, getLocale, formatNumber } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -11,12 +15,11 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
 import { usePhaseList } from '@/hooks/use-phases';
 import { findPhaseFor, phaseKindInfo } from '@/types/experiment';
-import { runAutoBackup } from '@/data/auto-backup';
 import { getMeasurementById, updateMeasurementNote } from '@/data/database';
 import type { MeasurementDetails } from '@/types/measurement';
 
 function formatDate(iso: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
+  return new Intl.DateTimeFormat(getLocale(), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -26,6 +29,7 @@ function formatDate(iso: string) {
 }
 
 export default function MeasurementDetailsScreen() {
+  useLanguage();
   const { id } = useLocalSearchParams<{ id: string }>();
   const db = useSQLiteContext();
   const [measurement, setMeasurement] = useState<MeasurementDetails | null>(null);
@@ -50,9 +54,8 @@ export default function MeasurementDetailsScreen() {
       setMeasurement({ ...current, note: noteDraft.trim() });
       setEditingNote(false);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      void runAutoBackup(db);
     } catch {
-      Alert.alert('Не получилось сохранить заметку', 'Попробуй ещё раз.');
+      Alert.alert(tr('Не получилось сохранить заметку'), tr('Попробуй ещё раз.'));
     } finally {
       setSavingNote(false);
     }
@@ -79,10 +82,10 @@ export default function MeasurementDetailsScreen() {
   if (loading || loadError) {
     return (
       <ScreenShell>
-        <Pressable accessibilityLabel="Назад" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityLabel={tr("Назад")} onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={22} color={Palette.text} />
         </Pressable>
-        <DataLoadState loading={loading} error={loadError} onRetry={() => setLoadAttempt((value) => value + 1)} label="измерение" />
+        <DataLoadState loading={loading} error={loadError} onRetry={() => setLoadAttempt((value) => value + 1)} label={tr("измерение")} />
       </ScreenShell>
     );
   }
@@ -94,8 +97,8 @@ export default function MeasurementDetailsScreen() {
           <IconSymbol name="chevron.left" size={22} color={Palette.text} />
         </Pressable>
         <View style={styles.notFound}>
-          <Text style={styles.notFoundTitle}>Измерение не найдено</Text>
-          <Text style={styles.notFoundText}>Возможно, запись уже была удалена.</Text>
+          <Text style={styles.notFoundTitle}>{tr("Измерение не найдено")}</Text>
+          <Text style={styles.notFoundText}>{tr("Возможно, запись уже была удалена.")}</Text>
         </View>
       </ScreenShell>
     );
@@ -105,17 +108,17 @@ export default function MeasurementDetailsScreen() {
 
   return (
     <ScreenShell contentContainerStyle={styles.content}>
-      {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label="метку периода" /> : null}
+      {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label={tr("метку периода")} /> : null}
       <View style={styles.header}>
         <Pressable
-          accessibilityLabel="Назад"
+          accessibilityLabel={tr("Назад")}
           hitSlop={12}
           onPress={() => router.back()}
           style={styles.backButton}>
           <IconSymbol name="chevron.left" size={23} color={Palette.text} />
         </Pressable>
         <View style={styles.headerText}>
-          <Text style={styles.title}>{isSeries ? 'Серия измерений' : 'Измерение'}</Text>
+          <Text style={styles.title}>{isSeries ? tr('Серия измерений') : tr('Измерение')}</Text>
           <Text style={styles.subtitle}>{formatDate(measurement.measuredAt)}</Text>
         </View>
         <View style={styles.headerSpacer} />
@@ -128,14 +131,13 @@ export default function MeasurementDetailsScreen() {
         return (
           <View style={[styles.phaseChip, { backgroundColor: info.soft }]}>
             <View style={[styles.phaseDot, { backgroundColor: info.color }]} />
-            <Text style={[styles.phaseChipText, { color: info.color }]}>
-              Период: {phase.title}
+            <Text style={[styles.phaseChipText, { color: info.color }]}>{tr(" Период: ")}{phase.title}
             </Text>
           </View>
         );
       })()}
 
-      <Text style={styles.sectionLabel}>{isSeries ? 'СРЕДНИЕ ЗНАЧЕНИЯ' : 'ПОКАЗАТЕЛИ'}</Text>
+      <Text style={styles.sectionLabel}>{isSeries ? tr('СРЕДНИЕ ЗНАЧЕНИЯ') : tr('ПОКАЗАТЕЛИ')}</Text>
       <GlassCard contentStyle={styles.summaryCard}>
         <View style={styles.pressureRow}>
           <View style={styles.largeMetric}>
@@ -143,28 +145,28 @@ export default function MeasurementDetailsScreen() {
               <IconSymbol name="arrow.up.circle" size={21} color={Palette.coral} />
             </View>
             <Text style={styles.metricValue}>{measurement.systolic}</Text>
-            <Text style={styles.metricLabel}>Систолическое</Text>
-            <Text style={styles.metricUnit}>мм рт. ст.</Text>
+            <Text style={styles.metricLabel}>{tr("Систолическое")}</Text>
+            <Text style={styles.metricUnit}>{tr("мм рт. ст.")}</Text>
           </View>
           <View style={[styles.largeMetric, styles.orangeMetric]}>
             <View style={styles.metricIcon}>
               <IconSymbol name="arrow.down.circle" size={21} color={Palette.orange} />
             </View>
             <Text style={styles.metricValue}>{measurement.diastolic}</Text>
-            <Text style={styles.metricLabel}>Диастолическое</Text>
-            <Text style={styles.metricUnit}>мм рт. ст.</Text>
+            <Text style={styles.metricLabel}>{tr("Диастолическое")}</Text>
+            <Text style={styles.metricUnit}>{tr("мм рт. ст.")}</Text>
           </View>
         </View>
         <View style={styles.pulseRow}>
           <IconSymbol name="waveform.path.ecg" size={22} color="#6D78A8" />
           <Text style={styles.pulseValue}>{measurement.pulse}</Text>
-          <Text style={styles.pulseUnit}>уд/мин</Text>
+          <Text style={styles.pulseUnit}>{tr("уд/мин")}</Text>
         </View>
       </GlassCard>
 
       {isSeries ? (
         <>
-          <Text style={styles.sectionLabel}>ЗАМЕРЫ СЕРИИ</Text>
+          <Text style={styles.sectionLabel}>{tr("ЗАМЕРЫ СЕРИИ")}</Text>
           <View style={styles.readingsCard}>
             {measurement.readings.map((reading, index) => (
               <View
@@ -179,15 +181,15 @@ export default function MeasurementDetailsScreen() {
                 <View style={styles.readingMetrics}>
                   <View style={styles.readingMetric}>
                     <Text style={styles.readingValue}>{reading.systolic}</Text>
-                    <Text style={styles.readingLabel}>Сист.</Text>
+                    <Text style={styles.readingLabel}>{tr("Сист.")}</Text>
                   </View>
                   <View style={styles.readingMetric}>
                     <Text style={styles.readingValue}>{reading.diastolic}</Text>
-                    <Text style={styles.readingLabel}>Диаст.</Text>
+                    <Text style={styles.readingLabel}>{tr("Диаст.")}</Text>
                   </View>
                   <View style={styles.readingMetric}>
                     <Text style={styles.readingValue}>{reading.pulse}</Text>
-                    <Text style={styles.readingLabel}>Пульс</Text>
+                    <Text style={styles.readingLabel}>{tr("Пульс")}</Text>
                   </View>
                 </View>
               </View>
@@ -196,14 +198,14 @@ export default function MeasurementDetailsScreen() {
         </>
       ) : null}
 
-      <Text style={styles.sectionLabel}>САМОЧУВСТВИЕ</Text>
+      <Text style={styles.sectionLabel}>{tr("САМОЧУВСТВИЕ")}</Text>
       <GlassCard contentStyle={styles.wellbeingCard}>
         <View>
-          <Text style={styles.wellbeingTitle}>Самочувствие</Text>
-          <Text style={styles.wellbeingSubtitle}>Оценка во время измерения</Text>
+          <Text style={styles.wellbeingTitle}>{tr("Самочувствие")}</Text>
+          <Text style={styles.wellbeingSubtitle}>{tr("Оценка во время измерения")}</Text>
         </View>
         <View style={styles.score}>
-          <Text style={styles.scoreValue}>{measurement.wellbeing}</Text>
+          <Text style={styles.scoreValue}>{formatNumber(measurement.wellbeing, 1)}</Text>
           <Text style={styles.scoreTotal}>/10</Text>
         </View>
       </GlassCard>
@@ -212,14 +214,14 @@ export default function MeasurementDetailsScreen() {
         <View style={styles.tags}>
           {measurement.tags.map((tag) => (
             <View key={tag} style={styles.tag}>
-              <Text style={styles.tagText}>{tag}</Text>
+              <Text style={styles.tagText}>{tr(tag)}</Text>
             </View>
           ))}
         </View>
       ) : null}
 
       <View style={styles.noteHeader}>
-        <Text style={[styles.sectionLabel, styles.noteLabel]}>ЗАМЕТКА</Text>
+        <Text style={[styles.sectionLabel, styles.noteLabel]}>{tr("ЗАМЕТКА")}</Text>
         {editingNote ? null : (
           <Pressable
             accessibilityRole="button"
@@ -228,7 +230,7 @@ export default function MeasurementDetailsScreen() {
             style={({ pressed }) => [styles.noteEdit, pressed && styles.notePressed]}>
             <IconSymbol name="square.and.pencil" size={15} color={Palette.coral} />
             <Text style={styles.noteEditText}>
-              {measurement.note ? 'Изменить' : 'Добавить'}
+              {measurement.note ? tr('Изменить') : tr('Добавить')}
             </Text>
           </Pressable>
         )}
@@ -238,11 +240,11 @@ export default function MeasurementDetailsScreen() {
         {editingNote ? (
           <>
             <TextInput
-              accessibilityLabel="Заметка к измерению"
+              accessibilityLabel={tr("Заметка к измерению")}
               autoFocus
               multiline
               onChangeText={setNoteDraft}
-              placeholder="Например: после прогулки, до приёма лекарства…"
+              placeholder={tr("Например: после прогулки, до приёма лекарства…")}
               placeholderTextColor={Palette.subtle}
               style={styles.noteInput}
               textAlignVertical="top"
@@ -252,7 +254,7 @@ export default function MeasurementDetailsScreen() {
               <Pressable
                 onPress={() => setEditingNote(false)}
                 style={({ pressed }) => [styles.noteButton, pressed && styles.notePressed]}>
-                <Text style={styles.noteCancelText}>Отмена</Text>
+                <Text style={styles.noteCancelText}>{tr("Отмена")}</Text>
               </Pressable>
               <Pressable
                 disabled={savingNote}
@@ -263,14 +265,14 @@ export default function MeasurementDetailsScreen() {
                   pressed && styles.notePressed,
                 ]}>
                 <Text style={styles.noteSaveText}>
-                  {savingNote ? 'Сохраняем…' : 'Сохранить'}
+                  {savingNote ? tr('Сохраняем…') : tr('Сохранить')}
                 </Text>
               </Pressable>
             </View>
           </>
         ) : (
           <Text style={[styles.noteText, !measurement.note && styles.noteEmpty]}>
-            {measurement.note || 'Заметка не добавлена'}
+            {measurement.note || tr('Заметка не добавлена')}
           </Text>
         )}
       </View>

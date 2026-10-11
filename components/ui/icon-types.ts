@@ -20,4 +20,7 @@ export type AppSymbolName =
   | 'trash'
   | 'arrow.counterclockwise'
   | 'square.and.pencil'
-  | 'testtube.2';
+  | 'testtube.2'
+  | 'folder'
+  | 'doc'
+  | 'globe';

@@ -37,6 +37,9 @@ const MAPPING = {
   'arrow.counterclockwise': 'refresh',
   'square.and.pencil': 'edit',
   'testtube.2': 'science',
+  folder: 'folder-open',
+  doc: 'description',
+  globe: 'language',
 } as IconMapping;
 
 /**

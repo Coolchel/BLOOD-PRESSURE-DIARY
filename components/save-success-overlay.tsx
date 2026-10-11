@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Modal, StyleSheet, Text, View } from 'react-native';
@@ -16,10 +20,11 @@ const VISIBLE_MS = 1250;
 
 export function SaveSuccessOverlay({
   visible,
-  title = 'Сохранено',
-  subtitle = 'Измерение добавлено в дневник',
+  title = tr('Сохранено'),
+  subtitle = tr('Измерение добавлено в дневник'),
   onDone,
 }: SaveSuccessOverlayProps) {
+  useLanguage();
   const backdrop = useRef(new Animated.Value(0)).current;
   const circle = useRef(new Animated.Value(0)).current;
   const mark = useRef(new Animated.Value(0)).current;

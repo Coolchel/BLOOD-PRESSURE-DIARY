@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr, getLocale } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
@@ -41,13 +45,13 @@ function combineSort(metric: SortMetric, direction: SortDirection): MeasurementS
 }
 
 function metricLabel(metric: SortMetric) {
-  return SORT_METRICS.find((item) => item.key === metric)?.label ?? 'Дата измерения';
+  return tr(SORT_METRICS.find((item) => item.key === metric)?.label ?? 'Дата измерения');
 }
 
 function directionOptions(metric: SortMetric) {
   return metric === 'date'
-    ? [{ key: 'first' as const, label: 'Сначала новые' }, { key: 'second' as const, label: 'Сначала старые' }]
-    : [{ key: 'first' as const, label: 'Сначала большие значения' }, { key: 'second' as const, label: 'Сначала меньшие значения' }];
+    ? [{ key: 'first' as const, label: tr('Сначала новые') }, { key: 'second' as const, label: tr('Сначала старые') }]
+    : [{ key: 'first' as const, label: tr('Сначала большие значения') }, { key: 'second' as const, label: tr('Сначала меньшие значения') }];
 }
 
 function SettingsRow({ title, value, onPress, last = false }: {
@@ -56,6 +60,7 @@ function SettingsRow({ title, value, onPress, last = false }: {
   onPress: () => void;
   last?: boolean;
 }) {
+  useLanguage();
   return (
     <Pressable
       accessibilityRole="button"
@@ -74,6 +79,7 @@ function ChoiceRow({ label, selected, onPress, last = false }: {
   onPress: () => void;
   last?: boolean;
 }) {
+  useLanguage();
   return (
     <Pressable
       accessibilityRole="radio"
@@ -87,6 +93,7 @@ function ChoiceRow({ label, selected, onPress, last = false }: {
 }
 
 export function HistoryFilters({ visible, value, onApply, onClose }: Props) {
+  useLanguage();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState(value);
   const [page, setPage] = useState<FilterPage>('main');
@@ -124,26 +131,26 @@ export function HistoryFilters({ visible, value, onApply, onClose }: Props) {
 
   function apply() {
     if (draft.startDate && draft.endDate && startOfDay(draft.startDate) > startOfDay(draft.endDate)) {
-      Alert.alert('Проверь период', 'Дата начала должна быть раньше даты окончания или совпадать с ней.');
+      Alert.alert(tr('Проверь период'), tr('Дата начала должна быть раньше даты окончания или совпадать с ней.'));
       return;
     }
     onApply(draft);
   }
 
-  const formatDate = (date: Date) => new Intl.DateTimeFormat('ru-RU', {
+  const formatDate = (date: Date) => new Intl.DateTimeFormat(getLocale(), {
     day: '2-digit', month: '2-digit', year: 'numeric',
   }).format(date);
   const periodValue = draft.startDate && draft.endDate
     ? `${formatDate(draft.startDate)} — ${formatDate(draft.endDate)}`
-    : draft.startDate ? `С ${formatDate(draft.startDate)}`
-    : draft.endDate ? `По ${formatDate(draft.endDate)}` : 'Все даты';
+    : draft.startDate ? tr`С ${formatDate(draft.startDate)}`
+    : draft.endDate ? tr`По ${formatDate(draft.endDate)}` : tr('Все даты');
   const directions = directionOptions(metric);
 
   const titles: Record<FilterPage, string> = {
-    main: 'Фильтры истории',
-    period: 'Период измерений',
-    metric: 'Сортировать по',
-    direction: 'Показывать сначала',
+    main: tr('Фильтры истории'),
+    period: tr('Период измерений'),
+    metric: tr('Сортировать по'),
+    direction: tr('Показывать сначала'),
   };
 
   return (
@@ -156,21 +163,21 @@ export function HistoryFilters({ visible, value, onApply, onClose }: Props) {
       transparent
       visible={visible}>
       <View style={[styles.overlay, { paddingTop: insets.top + 12 }]}>
-        <Pressable accessibilityLabel="Закрыть фильтры" onPress={onClose} style={StyleSheet.absoluteFill} />
+        <Pressable accessibilityLabel={tr("Закрыть фильтры")} onPress={onClose} style={StyleSheet.absoluteFill} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
             {page === 'main' ? <View style={styles.headerSide} /> : (
-              <Pressable accessibilityLabel="Назад" hitSlop={10} onPress={() => { setDateTarget(null); setPage('main'); }} style={styles.headerButton}>
+              <Pressable accessibilityLabel={tr("Назад")} hitSlop={10} onPress={() => { setDateTarget(null); setPage('main'); }} style={styles.headerButton}>
                 <IconSymbol name="chevron.left" size={23} color={Palette.text} />
               </Pressable>
             )}
             <View style={styles.headerCopy}>
               <Text style={styles.title}>{titles[page]}</Text>
-              {page === 'main' ? <Text style={styles.subtitle}>Период и порядок записей</Text> : null}
+              {page === 'main' ? <Text style={styles.subtitle}>{tr("Период и порядок записей")}</Text> : null}
             </View>
             {page === 'main' ? (
-              <Pressable accessibilityLabel="Закрыть фильтры" hitSlop={10} onPress={onClose} style={styles.headerButton}>
+              <Pressable accessibilityLabel={tr("Закрыть фильтры")} hitSlop={10} onPress={onClose} style={styles.headerButton}>
                 <IconSymbol name="xmark" size={21} color={Palette.muted} />
               </Pressable>
             ) : <View style={styles.headerSide} />}
@@ -178,24 +185,24 @@ export function HistoryFilters({ visible, value, onApply, onClose }: Props) {
 
           {page === 'main' ? (
             <>
-              <Text style={styles.sectionTitle}>Параметры</Text>
+              <Text style={styles.sectionTitle}>{tr("Параметры")}</Text>
               <View style={styles.group}>
-                <SettingsRow title="Период измерений" value={periodValue} onPress={() => setPage('period')} />
-                <SettingsRow title="Сортировать по" value={metricLabel(metric)} onPress={() => setPage('metric')} />
-                <SettingsRow title="Показывать сначала" value={directions.find((item) => item.key === direction)?.label ?? ''} onPress={() => setPage('direction')} last />
+                <SettingsRow title={tr("Период измерений")} value={periodValue} onPress={() => setPage('period')} />
+                <SettingsRow title={tr("Сортировать по")} value={metricLabel(metric)} onPress={() => setPage('metric')} />
+                <SettingsRow title={tr("Показывать сначала")} value={directions.find((item) => item.key === direction)?.label ?? ''} onPress={() => setPage('direction')} last />
               </View>
               <View style={styles.footer}>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => { setDateTarget(null); setDraft(DEFAULT_HISTORY_FILTERS); }}
                   style={({ pressed }) => [styles.reset, pressed && styles.buttonPressed]}>
-                  <Text style={styles.resetText}>Сбросить</Text>
+                  <Text style={styles.resetText}>{tr("Сбросить")}</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   onPress={apply}
                   style={({ pressed }) => [styles.apply, pressed && styles.buttonPressed]}>
-                  <Text style={styles.applyText}>Применить</Text>
+                  <Text style={styles.applyText}>{tr("Применить")}</Text>
                 </Pressable>
               </View>
             </>
@@ -204,7 +211,7 @@ export function HistoryFilters({ visible, value, onApply, onClose }: Props) {
           {page === 'metric' ? (
             <View style={styles.group}>
               {SORT_METRICS.map((item, index) => (
-                <ChoiceRow key={item.key} label={item.label} selected={metric === item.key} onPress={() => selectMetric(item.key)} last={index === SORT_METRICS.length - 1} />
+                <ChoiceRow key={item.key} label={tr(item.label)} selected={metric === item.key} onPress={() => selectMetric(item.key)} last={index === SORT_METRICS.length - 1} />
               ))}
             </View>
           ) : null}
@@ -221,17 +228,17 @@ export function HistoryFilters({ visible, value, onApply, onClose }: Props) {
             <>
               <View style={styles.dates}>
                 <Pressable accessibilityRole="button" onPress={() => chooseDate('startDate')} style={styles.date}>
-                  <Text style={styles.dateCaption}>С даты</Text>
-                  <Text style={styles.dateText}>{draft.startDate ? formatDate(draft.startDate) : 'Любая дата'}</Text>
+                  <Text style={styles.dateCaption}>{tr("С даты")}</Text>
+                  <Text style={styles.dateText}>{draft.startDate ? formatDate(draft.startDate) : tr('Любая дата')}</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={() => chooseDate('endDate')} style={styles.date}>
-                  <Text style={styles.dateCaption}>По дату включительно</Text>
-                  <Text style={styles.dateText}>{draft.endDate ? formatDate(draft.endDate) : 'Любая дата'}</Text>
+                  <Text style={styles.dateCaption}>{tr("По дату включительно")}</Text>
+                  <Text style={styles.dateText}>{draft.endDate ? formatDate(draft.endDate) : tr('Любая дата')}</Text>
                 </Pressable>
               </View>
               {draft.startDate || draft.endDate ? (
                 <Pressable accessibilityRole="button" onPress={() => { setDateTarget(null); setDraft((current) => ({ ...current, startDate: null, endDate: null })); }} style={styles.clearPeriod}>
-                  <Text style={styles.clearPeriodText}>Очистить период</Text>
+                  <Text style={styles.clearPeriodText}>{tr("Очистить период")}</Text>
                 </Pressable>
               ) : null}
               {dateTarget && Platform.OS === 'ios' ? (
@@ -240,13 +247,13 @@ export function HistoryFilters({ visible, value, onApply, onClose }: Props) {
                     value={pickerDate}
                     mode="date"
                     display="spinner"
-                    locale="ru-RU"
+                    locale={getLocale()}
                     textColor={Palette.text}
                     themeVariant="light"
                     onChange={(_, date) => date && setPickerDate(date)}
                   />
                   <Pressable accessibilityRole="button" onPress={() => acceptDate(pickerDate)} style={styles.dateDone}>
-                    <Text style={styles.dateDoneText}>Выбрать дату</Text>
+                    <Text style={styles.dateDoneText}>{tr("Выбрать дату")}</Text>
                   </Pressable>
                 </View>
               ) : null}

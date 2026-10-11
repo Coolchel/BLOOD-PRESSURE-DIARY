@@ -1,10 +1,52 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { saveExcel, resetStoredDiary } = require('../file-actions.js');
 const M = require('../model.js');
 const now = Date.parse('2026-10-02T10:00:00.000Z');
 const seed = () => M.seed(now);
 const reading = (systolic=120, measuredAt='2026-10-02T08:00:00.000Z') => ({systolic,diastolic:80,pulse:70,measuredAt});
 const session = (readings=[reading()],id=1) => ({id,mode:readings.length===1?'single':'series',measuredAt:readings[0]?.measuredAt||reading().measuredAt,readings,wellbeing:7,tags:['Спокойно'],note:''});
+
+test('backup facts count snapshot records, raw readings, series, local days and periods',()=>{
+  const diary={...seed(),sessions:[session(),session([reading(),reading()],2),session([reading(125,'2026-10-03T08:00:00.000Z')],3)]};
+  const payload=M.backup(diary);diary.sessions=[];diary.phases=[];
+  assert.deepEqual(M.backupFacts(payload),{records:3,readings:4,series:1,days:2,periods:3});
+  assert.deepEqual(M.backupFacts(M.backup(M.factoryState())),{records:0,readings:0,series:0,days:0,periods:0});
+});
+
+test('factory reset leaves an empty persistent diary without reseeding or creating a backup',()=>{
+  const cleared=M.factoryState(),reload=JSON.parse(JSON.stringify(cleared));
+  assert.deepEqual(M.withAutoBackup(reload,now),cleared);
+  assert.equal(M.resumableDraft(reload),null);
+  assert.deepEqual(M.statisticsPreferences(null,reload.phases).selection,{scope:'time',preset:'7'});
+  const store=new Map([['diary','old'],['preferences','custom'],['unrelated','keep']]);
+  const storage={getItem:key=>store.get(key)??null,removeItem:key=>store.delete(key),setItem:(key,value)=>{store.set(key,value);}};
+  resetStoredDiary(storage,'diary','preferences',cleared);
+  assert.deepEqual(JSON.parse(store.get('diary')),cleared);assert.equal(store.has('preferences'),false);assert.equal(store.get('unrelated'),'keep');
+  store.set('preferences','old settings');store.set('diary','old diary');
+  storage.setItem=(key,value)=>{if(key==='diary')throw Error('quota');store.set(key,value);};
+  assert.throws(()=>resetStoredDiary(storage,'diary','preferences',cleared),/quota/);
+  assert.equal(store.get('preferences'),'old settings');assert.equal(store.get('diary'),'old diary');
+});
+
+test('Excel save picker writes a valid workbook directly and cancellation creates no download',async()=>{
+  const XLSX=require('@e965/xlsx'),book=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Давление'],[120]]),'Измерения');
+  const content=XLSX.write(book,{bookType:'xlsx',type:'array'}),calls=[];
+  const host={showSaveFilePicker:async options=>{assert.equal(options.suggestedName,'diary.xlsx');return {createWritable:async()=>({write:async blob=>{const restored=XLSX.read(await blob.arrayBuffer());assert.equal(restored.Sheets['Измерения'].A2.v,120);calls.push('write');},close:async()=>calls.push('close'),abort:async()=>calls.push('abort')})};}};
+  await saveExcel('diary.xlsx',content,host);assert.deepEqual(calls,['write','close']);
+  host.showSaveFilePicker=async()=>{throw Object.assign(Error('cancel'),{name:'AbortError'});};
+  await assert.rejects(saveExcel('diary.xlsx',content,host),{name:'AbortError'});assert.deepEqual(calls,['write','close']);
+});
+
+test('failed Excel writes abort the temporary stream; unsupported browsers download without app dialogs',async()=>{
+  let aborted=false;
+  await assert.rejects(saveExcel('diary.xlsx','bytes',{showSaveFilePicker:async()=>({createWritable:async()=>({write:async()=>{throw Error('disk');},abort:async()=>{aborted=true;}})})}),/disk/);
+  assert.equal(aborted,true);
+  const calls=[],link={click:()=>calls.push('click'),remove:()=>calls.push('remove')};
+  const host={document:{body:{append:()=>calls.push('append')},createElement:()=>link},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL:()=>calls.push('revoke')},setTimeout:fn=>fn()};
+  await saveExcel('diary.xlsx','bytes',host);assert.equal(link.download,'diary.xlsx');assert.deepEqual(calls,['append','click','remove','revoke']);
+});
 
 test('statistics preferences round trip applied choices without changing diary data',()=>{
   const state=seed(),before=M.clone(state),custom={scope:'time',preset:'custom',from:'2026-09-26',to:'2026-10-02'};
@@ -377,11 +419,48 @@ test('version 2 backup preserves overlapping periods and appearance while versio
   assert.deepEqual(M.restore(legacy).phases,seed().phases);
   assert.throws(()=>M.restore({...payload,version:99}));
 });
-test('automatic backup respects disable, retains seven days and avoids erasing last copy with empty state', () => {
-  let state=seed();for(let i=0;i<10;i++)state=M.withAutoBackup(state,now+i*M.DAY);
-  assert.equal(state.copies.length,7);assert.equal(state.copies[0].date,'2026-10-11');
-  const disabled=M.withAutoBackup({...state,autoBackup:false},now+11*M.DAY);assert.equal(disabled.lastBackup,state.lastBackup);
-  const empty=M.withAutoBackup({...state,sessions:[]},now+12*M.DAY);assert.deepEqual(empty.copies,state.copies);
+test('one launch backup uses a rolling 24-hour interval and never updates twice within it', () => {
+  const first=Date.parse('2026-10-10T23:59:00Z'),initial=seed(),before=M.clone(initial);
+  const saved=M.withAutoBackup(initial,first);
+  assert.equal(saved.backupCopy.payload.exportedAt,new Date(first).toISOString());
+  assert.equal(saved.lastBackup,saved.backupCopy.at);
+  const changed=M.clone(saved);changed.sessions[0].note='После создания копии';
+  for(const elapsed of [60000,M.DAY-1,-60000]){
+    const repeated=M.withAutoBackup(changed,first+elapsed);
+    assert.deepEqual(repeated.backupCopy,saved.backupCopy);
+    assert.equal(repeated.lastBackup,saved.lastBackup);
+    assert.equal(repeated.sessions[0].note,changed.sessions[0].note);
+  }
+  const next=M.withAutoBackup(changed,first+M.DAY);
+  assert.equal(next.backupCopy.payload.sessions[0].note,changed.sessions[0].note);
+  assert.equal(next.lastBackup,new Date(first+M.DAY).toISOString());
+  assert.equal(next.copies,undefined);assert.deepEqual(initial,before);
+});
+
+test('single-copy migration retains the latest legacy snapshot and every diary field without refreshing it', () => {
+  const legacy=seed();delete legacy.backupCopy;
+  legacy.draft={note:'Черновик'};legacy.autoBackup=false;
+  const older={at:new Date(now-M.DAY).toISOString(),payload:M.backup(legacy)};
+  const latest={at:new Date(now).toISOString(),payload:M.backup(legacy)};
+  latest.payload.sessions[0].note='Последняя копия';
+  legacy.copies=[older,latest];const before=M.clone(legacy);
+  const migrated=M.withAutoBackup(legacy,now+1);
+  assert.deepEqual(migrated.backupCopy,latest);assert.equal(migrated.lastBackup,latest.at);
+  assert.equal(migrated.copies,undefined);
+  assert.deepEqual(migrated.sessions,legacy.sessions);assert.deepEqual(migrated.phases,legacy.phases);
+  assert.deepEqual(migrated.draft,legacy.draft);assert.deepEqual(legacy,before);
+});
+
+test('disabled, empty and folder changes preserve the saved copy and original update time', () => {
+  const saved=M.withAutoBackup(seed(),now);
+  const disabled=M.withAutoBackup({...saved,autoBackup:false},now+M.DAY);
+  const empty=M.withAutoBackup({...saved,sessions:[]},now+M.DAY);
+  assert.deepEqual(disabled.backupCopy,saved.backupCopy);assert.deepEqual(empty.backupCopy,saved.backupCopy);
+  assert.equal(disabled.lastBackup,saved.lastBackup);assert.equal(empty.lastBackup,saved.lastBackup);
+  const folder=M.normalizeBackupState({...saved,backupFolder:'  Документы / Здоровье  '});
+  assert.equal(folder.backupFolder,'Документы / Здоровье');
+  assert.deepEqual(folder.backupCopy,saved.backupCopy);assert.equal(folder.lastBackup,saved.lastBackup);
+  assert.equal(M.withAutoBackup({...seed(),sessions:[]},now).backupCopy,null);
 });
 
 test('reading time is captured on first numeric input, not opening or later editing', () => {

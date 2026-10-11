@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -26,6 +30,7 @@ import { phaseKindInfo } from '@/types/experiment';
 import type { MeasurementSummary } from '@/types/measurement';
 
 export default function PhaseDetailsScreen() {
+  useLanguage();
   const { id } = useLocalSearchParams<{ id: string }>();
   const db = useSQLiteContext();
   const [phase, setPhase] = useState<ExperimentPhase | null>(null);
@@ -83,7 +88,7 @@ export default function PhaseDetailsScreen() {
       setFinished(true);
     } catch {
       if (currentRequest === requestId.current) {
-        Alert.alert('Не получилось завершить период', 'Попробуйте ещё раз.');
+        Alert.alert(tr('Не получилось завершить период'), tr('Попробуйте ещё раз.'));
       }
     } finally {
       finishInProgress.current = false;
@@ -94,10 +99,10 @@ export default function PhaseDetailsScreen() {
   if (loading || error) {
     return (
       <ScreenShell>
-        <Pressable accessibilityLabel="Назад" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityLabel={tr("Назад")} onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={22} color={Palette.text} />
         </Pressable>
-        <DataLoadState loading={loading} error={error} onRetry={() => void load()} label="период" />
+        <DataLoadState loading={loading} error={error} onRetry={() => void load()} label={tr("период")} />
       </ScreenShell>
     );
   }
@@ -109,8 +114,8 @@ export default function PhaseDetailsScreen() {
           <IconSymbol name="chevron.left" size={22} color={Palette.text} />
         </Pressable>
         <View style={styles.notFound}>
-          <Text style={styles.notFoundTitle}>Период не найден</Text>
-          <Text style={styles.notFoundText}>Возможно, он уже удалён.</Text>
+          <Text style={styles.notFoundTitle}>{tr("Период не найден")}</Text>
+          <Text style={styles.notFoundText}>{tr("Возможно, он уже удалён.")}</Text>
         </View>
       </ScreenShell>
     );
@@ -127,7 +132,7 @@ export default function PhaseDetailsScreen() {
     <ScreenShell contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Pressable
-          accessibilityLabel="Назад"
+          accessibilityLabel={tr("Назад")}
           hitSlop={12}
           onPress={() => router.back()}
           style={styles.backButton}>
@@ -141,7 +146,7 @@ export default function PhaseDetailsScreen() {
           </Text>
         </View>
         <Pressable
-          accessibilityLabel="Изменить период"
+          accessibilityLabel={tr("Изменить период")}
           disabled={finishing}
           hitSlop={12}
           onPress={() =>
@@ -159,7 +164,7 @@ export default function PhaseDetailsScreen() {
         </View>
         {phase.endedAt === null ? (
           <View style={styles.liveChip}>
-            <Text style={styles.liveChipText}>идёт сейчас</Text>
+            <Text style={styles.liveChipText}>{tr("идёт сейчас")}</Text>
           </View>
         ) : null}
         <Text style={styles.countText}>{pluralRecords(measurements.length)}</Text>
@@ -172,24 +177,24 @@ export default function PhaseDetailsScreen() {
           onPress={() => void finishPhase()}
           style={[styles.finishButton, finishing && styles.finishDisabled]}>
           <IconSymbol name="checkmark" size={18} color={Palette.coral} />
-          <Text style={styles.finishText}>{finishing ? 'Завершаем…' : 'Завершить период'}</Text>
+          <Text style={styles.finishText}>{finishing ? tr('Завершаем…') : tr('Завершить период')}</Text>
         </Pressable>
       ) : null}
 
-      <Text style={styles.sectionLabel}>СРЕДНЕЕ ЗА ПЕРИОД</Text>
+      <Text style={styles.sectionLabel}>{tr("СРЕДНЕЕ ЗА ПЕРИОД")}</Text>
       <GlassCard contentStyle={styles.statsCard}>
         <View style={styles.statsRow}>
           <View style={[styles.stat, { backgroundColor: Palette.coralSoft }]}>
             <Text style={styles.statValue}>
               {hasData ? stats.systolic : '—'}
             </Text>
-            <Text style={styles.statLabel}>Систолическое</Text>
+            <Text style={styles.statLabel}>{tr("Систолическое")}</Text>
           </View>
           <View style={[styles.stat, { backgroundColor: Palette.orangeSoft }]}>
             <Text style={styles.statValue}>
               {hasData ? stats.diastolic : '—'}
             </Text>
-            <Text style={styles.statLabel}>Диастолическое</Text>
+            <Text style={styles.statLabel}>{tr("Диастолическое")}</Text>
           </View>
         </View>
         <View style={styles.statsRow}>
@@ -197,32 +202,32 @@ export default function PhaseDetailsScreen() {
             <Text style={styles.statValue}>
               {hasData ? stats.pulse : '—'}
             </Text>
-            <Text style={styles.statLabel}>Пульс</Text>
+            <Text style={styles.statLabel}>{tr("Пульс")}</Text>
           </View>
           <View style={[styles.stat, { backgroundColor: '#FFF8E9' }]}>
             <Text style={styles.statValue}>
               {hasData ? stats.wellbeing : '—'}
             </Text>
-            <Text style={styles.statLabel}>Самочувствие</Text>
+            <Text style={styles.statLabel}>{tr("Самочувствие")}</Text>
           </View>
         </View>
       </GlassCard>
 
-      <Text style={styles.sectionLabel}>ДИНАМИКА ВНУТРИ ПЕРИОДА</Text>
+      <Text style={styles.sectionLabel}>{tr("ДИНАМИКА ВНУТРИ ПЕРИОДА")}</Text>
       <GlassCard contentStyle={styles.chartCard}>
         <WeeklyChart measurements={measurements} />
       </GlassCard>
 
       {phase.note ? (
         <>
-          <Text style={styles.sectionLabel}>ЗАМЕТКА</Text>
+          <Text style={styles.sectionLabel}>{tr("ЗАМЕТКА")}</Text>
           <View style={styles.noteCard}>
             <Text style={styles.noteText}>{phase.note}</Text>
           </View>
         </>
       ) : null}
 
-      <Text style={styles.sectionLabel}>ИЗМЕРЕНИЯ ПЕРИОДА</Text>
+      <Text style={styles.sectionLabel}>{tr("ИЗМЕРЕНИЯ ПЕРИОДА")}</Text>
       <View style={styles.list}>
         {measurements.map((measurement) => (
           <MeasurementCard
@@ -239,12 +244,12 @@ export default function PhaseDetailsScreen() {
       </View>
 
       {!hasData ? (
-        <Text style={styles.emptyText}>В этот период измерений пока нет.</Text>
+        <Text style={styles.emptyText}>{tr("В этот период измерений пока нет.")}</Text>
       ) : null}
       <SaveSuccessOverlay
         visible={finished}
-        title="Период завершён"
-        subtitle="Дата завершения сохранена"
+        title={tr("Период завершён")}
+        subtitle={tr("Дата завершения сохранена")}
         onDone={() => { setFinished(false); void load(); }}
       />
     </ScreenShell>

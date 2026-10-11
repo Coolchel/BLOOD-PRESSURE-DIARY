@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr, getLocale } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -29,7 +33,7 @@ import { PHASE_KINDS, phaseKindInfo } from '@/types/experiment';
 type PickerTarget = 'start' | 'end';
 
 function formatMoment(date: Date) {
-  return new Intl.DateTimeFormat('ru-RU', {
+  return new Intl.DateTimeFormat(getLocale(), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -39,13 +43,14 @@ function formatMoment(date: Date) {
 }
 
 export default function PhaseEditorScreen() {
+  useLanguage();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const db = useSQLiteContext();
   const editingId = id ? Number(id) : null;
   const isEditing = editingId !== null && Number.isInteger(editingId) && editingId > 0;
 
   const [kind, setKind] = useState<PhaseKind>('clean');
-  const [title, setTitle] = useState('Без всего');
+  const [title, setTitle] = useState(tr('Без всего'));
   const [titleTouched, setTitleTouched] = useState(false);
   const [startedAt, setStartedAt] = useState(new Date());
   const [endedAt, setEndedAt] = useState<Date | null>(null);
@@ -100,11 +105,11 @@ export default function PhaseEditorScreen() {
   async function save() {
     if (saving) return;
     if (!title.trim()) {
-      Alert.alert('Нужно название', 'Назови период, чтобы отличать его в списке.');
+      Alert.alert(tr('Нужно название'), tr('Назови период, чтобы отличать его в списке.'));
       return;
     }
     if (endedAt && endedAt.getTime() <= startedAt.getTime()) {
-      Alert.alert('Проверь даты', 'Конец периода должен быть позже начала.');
+      Alert.alert(tr('Проверь даты'), tr('Конец периода должен быть позже начала.'));
       return;
     }
 
@@ -126,7 +131,7 @@ export default function PhaseEditorScreen() {
         setSaved(true);
       }
     } catch (error) {
-      Alert.alert('Не получилось сохранить', error instanceof PhaseOverlapError ? error.message : 'Попробуй ещё раз.');
+      Alert.alert(tr('Не получилось сохранить'), error instanceof PhaseOverlapError ? tr(error.message) : tr('Попробуй ещё раз.'));
       setSaving(false);
     }
   }
@@ -135,12 +140,12 @@ export default function PhaseEditorScreen() {
     if (!isEditing || editingId === null) return;
 
     Alert.alert(
-      'Удалить период?',
-      'Измерения останутся на месте — исчезнет только разбиение на эксперименты.',
+      tr('Удалить период?'),
+      tr('Измерения останутся на месте — исчезнет только разбиение на эксперименты.'),
       [
-        { text: 'Отмена', style: 'cancel' },
+        { text: tr('Отмена'), style: 'cancel' },
         {
-          text: 'Удалить',
+          text: tr('Удалить'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -149,7 +154,7 @@ export default function PhaseEditorScreen() {
               void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               router.back();
             } catch {
-              Alert.alert('Не получилось удалить период', 'Попробуй ещё раз. Измерения сохранены.');
+              Alert.alert(tr('Не получилось удалить период'), tr('Попробуй ещё раз. Измерения сохранены.'));
             } finally {
               setSaving(false);
             }
@@ -164,11 +169,11 @@ export default function PhaseEditorScreen() {
   if (loading || loadError || notFound || (id && !isEditing)) {
     return (
       <ScreenShell>
-        <Pressable accessibilityLabel="Закрыть" onPress={() => router.back()} style={styles.closeButton}>
+        <Pressable accessibilityLabel={tr("Закрыть")} onPress={() => router.back()} style={styles.closeButton}>
           <IconSymbol name="xmark" size={20} color={Palette.text} />
         </Pressable>
-        <DataLoadState loading={loading} error={loadError} onRetry={() => setLoadAttempt((value) => value + 1)} label="период" />
-        {notFound || (id && !isEditing) ? <Text style={styles.subtitle}>Период не найден. Вернитесь к списку периодов.</Text> : null}
+        <DataLoadState loading={loading} error={loadError} onRetry={() => setLoadAttempt((value) => value + 1)} label={tr("период")} />
+        {notFound || (id && !isEditing) ? <Text style={styles.subtitle}>{tr("Период не найден. Вернитесь к списку периодов.")}</Text> : null}
       </ScreenShell>
     );
   }
@@ -178,26 +183,26 @@ export default function PhaseEditorScreen() {
       <ScreenShell contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Pressable
-            accessibilityLabel="Закрыть"
+            accessibilityLabel={tr("Закрыть")}
             hitSlop={12}
             onPress={() => router.back()}
             style={styles.closeButton}>
             <IconSymbol name="xmark" size={20} color={Palette.text} />
           </Pressable>
           <View style={styles.headerText}>
-            <Text style={styles.title}>{isEditing ? 'Период' : 'Новый период'}</Text>
+            <Text style={styles.title}>{isEditing ? tr('Период') : tr('Новый период')}</Text>
             <Text style={styles.subtitle}>
-              {isEditing ? 'Можно поправить даты и название' : 'Предыдущий период закроется сам'}
+              {isEditing ? tr('Можно поправить даты и название') : tr('Предыдущий период закроется сам')}
             </Text>
           </View>
           <View style={styles.headerSpacer} />
         </View>
 
         {loading ? (
-          <Text style={styles.loading}>Загружаем период…</Text>
+          <Text style={styles.loading}>{tr("Загружаем период…")}</Text>
         ) : (
           <>
-            <Text style={styles.sectionLabel}>ЧТО В ЭТОТ ПЕРИОД</Text>
+            <Text style={styles.sectionLabel}>{tr("ЧТО В ЭТОТ ПЕРИОД")}</Text>
             <View style={styles.kinds}>
               {PHASE_KINDS.map((item) => {
                 const selected = item.kind === kind;
@@ -211,7 +216,7 @@ export default function PhaseEditorScreen() {
                     ]}>
                     <View style={[styles.kindDot, { backgroundColor: item.color }]} />
                     <Text style={[styles.kindText, selected && { color: item.color }]}>
-                      {item.label}
+                      {tr(item.label)}
                     </Text>
                   </Pressable>
                 );
@@ -219,22 +224,22 @@ export default function PhaseEditorScreen() {
             </View>
             <Text style={styles.kindHint}>{phaseKindInfo(kind).hint}</Text>
 
-            <Text style={styles.sectionLabel}>НАЗВАНИЕ</Text>
+            <Text style={styles.sectionLabel}>{tr("НАЗВАНИЕ")}</Text>
             <View style={styles.inputCard}>
               <TextInput
-                accessibilityLabel="Название периода"
+                accessibilityLabel={tr("Название периода")}
                 onChangeText={(value) => {
                   setTitleTouched(true);
                   setTitle(value);
                 }}
-                placeholder="Например: Кофе, вторая попытка"
+                placeholder={tr("Например: Кофе, вторая попытка")}
                 placeholderTextColor={Palette.subtle}
                 style={styles.input}
                 value={title}
               />
             </View>
 
-            <Text style={styles.sectionLabel}>НАЧАЛО</Text>
+            <Text style={styles.sectionLabel}>{tr("НАЧАЛО")}</Text>
             <Pressable
               onPress={() => setPicker('start')}
               style={({ pressed }) => [styles.dateCard, pressed && styles.pressed]}>
@@ -245,14 +250,12 @@ export default function PhaseEditorScreen() {
               <IconSymbol name="chevron.right" size={18} color={Palette.subtle} />
             </Pressable>
 
-            <Text style={styles.sectionLabel}>ОКОНЧАНИЕ</Text>
+            <Text style={styles.sectionLabel}>{tr("ОКОНЧАНИЕ")}</Text>
             <GlassCard contentStyle={styles.finishCard}>
               <View style={styles.finishRow}>
                 <View style={styles.finishText}>
-                  <Text style={styles.finishTitle}>Период завершён</Text>
-                  <Text style={styles.finishHint}>
-                    Пока выключено, период считается текущим и не имеет конца
-                  </Text>
+                  <Text style={styles.finishTitle}>{tr("Период завершён")}</Text>
+                  <Text style={styles.finishHint}>{tr(" Пока выключено, период считается текущим и не имеет конца ")}</Text>
                 </View>
                 <Switch
                   ios_backgroundColor="#E4E6EA"
@@ -276,13 +279,13 @@ export default function PhaseEditorScreen() {
               ) : null}
             </GlassCard>
 
-            <Text style={styles.sectionLabel}>ЗАМЕТКА</Text>
+            <Text style={styles.sectionLabel}>{tr("ЗАМЕТКА")}</Text>
             <View style={styles.noteCard}>
               <TextInput
-                accessibilityLabel="Заметка к периоду"
+                accessibilityLabel={tr("Заметка к периоду")}
                 multiline
                 onChangeText={setNote}
-                placeholder="Например: 1–2 чашки в день, после обеда не пью"
+                placeholder={tr("Например: 1–2 чашки в день, после обеда не пью")}
                 placeholderTextColor={Palette.subtle}
                 style={styles.noteInput}
                 textAlignVertical="top"
@@ -301,7 +304,7 @@ export default function PhaseEditorScreen() {
               ]}>
               <IconSymbol name="checkmark" size={20} color={Palette.white} weight="semibold" />
               <Text style={styles.saveText}>
-                {saving ? 'Сохраняем…' : isEditing ? 'Сохранить изменения' : 'Начать период'}
+                {saving ? tr('Сохраняем…') : isEditing ? tr('Сохранить изменения') : tr('Начать период')}
               </Text>
             </Pressable>
 
@@ -310,7 +313,7 @@ export default function PhaseEditorScreen() {
                 onPress={confirmDelete}
                 style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}>
                 <IconSymbol name="trash" size={18} color="#D93D43" />
-                <Text style={styles.deleteText}>Удалить период</Text>
+                <Text style={styles.deleteText}>{tr("Удалить период")}</Text>
               </Pressable>
             ) : null}
           </>
@@ -319,8 +322,8 @@ export default function PhaseEditorScreen() {
 
       <SaveSuccessOverlay
         onDone={() => router.back()}
-        subtitle="Период добавлен в дневник"
-        title="Период создан"
+        subtitle={tr("Период добавлен в дневник")}
+        title={tr("Период создан")}
         visible={saved}
       />
 
@@ -334,16 +337,16 @@ export default function PhaseEditorScreen() {
           <View style={styles.dateSheet}>
             <View style={styles.dateSheetHeader}>
               <Text style={styles.dateSheetTitle}>
-                {picker === 'end' ? 'Окончание периода' : 'Начало периода'}
+                {picker === 'end' ? tr('Окончание периода') : tr('Начало периода')}
               </Text>
               <Pressable onPress={() => setPicker(null)}>
-                <Text style={styles.dateDone}>Готово</Text>
+                <Text style={styles.dateDone}>{tr("Готово")}</Text>
               </Pressable>
             </View>
             {Platform.OS === 'ios' ? (
               <DateTimePicker
                 display="spinner"
-                locale="ru-RU"
+                locale={getLocale()}
                 mode="datetime"
                 onChange={(_, date) => date && applyPickedDate(date)}
                 textColor={Palette.text}
@@ -354,15 +357,15 @@ export default function PhaseEditorScreen() {
                 <Pressable
                   onPress={() => setAndroidMode('date')}
                   style={styles.androidButton}>
-                  <Text style={styles.androidLabel}>Дата</Text>
+                  <Text style={styles.androidLabel}>{tr("Дата")}</Text>
                   <Text style={styles.androidValue}>{formatMoment(pickerValue)}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setAndroidMode('time')}
                   style={styles.androidButton}>
-                  <Text style={styles.androidLabel}>Время</Text>
+                  <Text style={styles.androidLabel}>{tr("Время")}</Text>
                   <Text style={styles.androidValue}>
-                    {new Intl.DateTimeFormat('ru-RU', {
+                    {new Intl.DateTimeFormat(getLocale(), {
                       hour: '2-digit',
                       minute: '2-digit',
                     }).format(pickerValue)}

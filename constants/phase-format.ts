@@ -1,12 +1,12 @@
 import type { PhaseStats, PhaseWithStats } from '@/types/experiment';
+import { appLocale, tr, getLocale, formatNumber } from '@/localization';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const shortDate = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' });
-
 export function formatPhaseRange(startedAt: string, endedAt: string | null) {
+  const shortDate = new Intl.DateTimeFormat(getLocale(), { day: 'numeric', month: 'short' });
   const from = shortDate.format(new Date(startedAt));
-  return `${from} — ${endedAt ? shortDate.format(new Date(endedAt)) : 'сейчас'}`;
+  return `${from} — ${endedAt ? shortDate.format(new Date(endedAt)) : tr('сейчас')}`;
 }
 
 export function phaseDays(startedAt: string, endedAt: string | null) {
@@ -16,6 +16,10 @@ export function phaseDays(startedAt: string, endedAt: string | null) {
 }
 
 export function pluralDays(days: number) {
+  if (appLocale.language !== 'ru') {
+    const words = { en: ['day', 'days'], fr: ['jour', 'jours'], es: ['día', 'días'], de: ['Tag', 'Tage'] };
+    return formatNumber(days) + ' ' + words[appLocale.language][new Intl.PluralRules(getLocale()).select(days) === 'one' ? 0 : 1];
+  }
   const tail = days % 10;
   const teen = days % 100;
   if (teen >= 11 && teen <= 14) return `${days} дней`;
@@ -25,12 +29,7 @@ export function pluralDays(days: number) {
 }
 
 export function pluralRecords(count: number) {
-  const tail = count % 10;
-  const teen = count % 100;
-  if (teen >= 11 && teen <= 14) return `${count} записей`;
-  if (tail === 1) return `${count} запись`;
-  if (tail >= 2 && tail <= 4) return `${count} записи`;
-  return `${count} записей`;
+  return appLocale.count(count, 'records');
 }
 
 /** Общая база сравнения: все «чистые» периоды, взвешенные по количеству записей. */
@@ -60,6 +59,6 @@ export function cleanBaseline(phases: PhaseWithStats[]): PhaseStats | null {
 
 export function formatDelta(delta: number, fractional = false) {
   const value = fractional ? Math.round(delta * 10) / 10 : Math.round(delta);
-  if (value === 0) return 'без изменений';
-  return `${value > 0 ? '+' : '−'}${Math.abs(value)}`;
+  if (value === 0) return tr('без изменений');
+  return `${value > 0 ? '+' : '−'}${formatNumber(Math.abs(value), fractional ? 1 : 0)}`;
 }

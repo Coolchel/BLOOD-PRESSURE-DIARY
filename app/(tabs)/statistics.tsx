@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -17,6 +21,7 @@ import { usePhaseList } from '@/hooks/use-phases';
 import { phaseKindInfo } from '@/types/experiment';
 
 export default function StatisticsScreen() {
+  useLanguage();
   const { measurements: allMeasurements, loading, error, refresh } = useMeasurements(-1);
   const [period, setPeriod] = useState<StatisticsInterval>('week');
   const [averageMode, setAverageMode] = useState<'time' | 'phase'>('time');
@@ -44,21 +49,21 @@ export default function StatisticsScreen() {
   if (loading || error) {
     return (
       <ScreenShell>
-        <Text style={styles.title}>Статистика</Text>
-        <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label="измерения" />
+        <Text style={styles.title}>{tr("Статистика")}</Text>
+        <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label={tr("измерения")} />
       </ScreenShell>
     );
   }
 
   return (
     <ScreenShell>
-      <Text style={styles.eyebrow}>ОБЗОР ПОКАЗАТЕЛЕЙ</Text>
-      <Text style={styles.title}>Статистика</Text>
-      {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label="периоды" /> : null}
+      <Text style={styles.eyebrow}>{tr("ОБЗОР ПОКАЗАТЕЛЕЙ")}</Text>
+      <Text style={styles.title}>{tr("Статистика")}</Text>
+      {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label={tr("периоды")} /> : null}
       <Text style={styles.subtitle}>
         {selected.days === null
-          ? `Все записи: ${measurements.length}`
-          : `${selected.label} · записей: ${measurements.length} из ${allMeasurements.length}`}
+          ? tr`Все записи: ${measurements.length}`
+          : tr`${tr(selected.label)} · записей: ${measurements.length} из ${allMeasurements.length}`}
       </Text>
 
       <View style={styles.periods}>
@@ -75,7 +80,7 @@ export default function StatisticsScreen() {
               }}
               style={[styles.periodItem, active && styles.periodItemActive]}>
               <Text style={[styles.periodText, active && styles.periodTextActive]}>
-                {item.label}
+                {tr(item.label)}
               </Text>
             </Pressable>
           );
@@ -85,39 +90,39 @@ export default function StatisticsScreen() {
       <GlassCard contentStyle={styles.chartCard} style={styles.chartSpacing}>
         <View style={styles.cardHeader}>
           <View style={styles.headerCopy}>
-            <Text style={styles.cardTitle}>Динамика давления</Text>
-            <Text style={styles.cardSubtitle}>Систолическое и диастолическое</Text>
+            <Text style={styles.cardTitle}>{tr("Динамика давления")}</Text>
+            <Text style={styles.cardSubtitle}>{tr("Систолическое и диастолическое")}</Text>
           </View>
           <IconSymbol name="chart.line.uptrend.xyaxis" size={23} color={Palette.coral} />
         </View>
-        <WeeklyChart measurements={measurements} phases={phases} window={window} emptyMessage="Нет измерений в выбранном интервале" />
+        <WeeklyChart measurements={measurements} phases={phases} window={window} emptyMessage={tr("Нет измерений в выбранном интервале")} />
       </GlassCard>
 
       <GlassCard contentStyle={styles.chartCard} style={styles.chartSpacing}>
         <View style={styles.cardHeader}>
           <View style={styles.headerCopy}>
-            <Text style={styles.cardTitle}>Динамика пульса</Text>
-            <Text style={styles.cardSubtitle}>Удары в минуту</Text>
+            <Text style={styles.cardTitle}>{tr("Динамика пульса")}</Text>
+            <Text style={styles.cardSubtitle}>{tr("Удары в минуту")}</Text>
           </View>
           <IconSymbol name="waveform.path.ecg" size={23} color="#6D78A8" />
         </View>
-        <WeeklyChart measurements={measurements} metric="pulse" window={window} emptyMessage="Нет измерений в выбранном интервале" />
+        <WeeklyChart measurements={measurements} metric="pulse" window={window} emptyMessage={tr("Нет измерений в выбранном интервале")} />
       </GlassCard>
 
       <GlassCard contentStyle={styles.chartCard}>
         <View style={styles.cardHeader}>
           <View style={styles.headerCopy}>
-            <Text style={styles.cardTitle}>Динамика самочувствия</Text>
-            <Text style={styles.cardSubtitle}>Оценка от 1 до 10</Text>
+            <Text style={styles.cardTitle}>{tr("Динамика самочувствия")}</Text>
+            <Text style={styles.cardSubtitle}>{tr("Оценка от 1 до 10")}</Text>
           </View>
           <View style={styles.numberIcon}>
             <Text style={styles.numberIconText}>10</Text>
           </View>
         </View>
-        <WeeklyChart measurements={measurements} metric="wellbeing" window={window} emptyMessage="Нет измерений в выбранном интервале" />
+        <WeeklyChart measurements={measurements} metric="wellbeing" window={window} emptyMessage={tr("Нет измерений в выбранном интервале")} />
       </GlassCard>
 
-      <Text style={styles.sectionTitle}>Средние значения</Text>
+      <Text style={styles.sectionTitle}>{tr("Средние значения")}</Text>
       <View style={[styles.periods, styles.averageModes]}>
         {(['time', 'phase'] as const).map((mode) => (
           <Pressable
@@ -127,7 +132,7 @@ export default function StatisticsScreen() {
             onPress={() => setAverageMode(mode)}
             style={[styles.periodItem, averageMode === mode && styles.periodItemActive]}>
             <Text style={[styles.periodText, averageMode === mode && styles.periodTextActive]}>
-              {mode === 'time' ? 'По времени' : 'По периодам'}
+              {mode === 'time' ? tr('По времени') : tr('По периодам')}
             </Text>
           </Pressable>
         ))}
@@ -141,7 +146,7 @@ export default function StatisticsScreen() {
               key={item.key}
               onPress={() => setAveragePeriod(item.key)}
               style={[styles.periodItem, averagePeriod === item.key && styles.periodItemActive]}>
-              <Text style={[styles.periodText, averagePeriod === item.key && styles.periodTextActive]}>{item.label}</Text>
+              <Text style={[styles.periodText, averagePeriod === item.key && styles.periodTextActive]}>{tr(item.label)}</Text>
             </Pressable>
           ))}
         </View>
@@ -159,50 +164,49 @@ export default function StatisticsScreen() {
             </Pressable>
           ))}
         </ScrollView>
-      ) : <Text style={styles.sectionCaption}>Создай период в разделе «Периоды».</Text>}
+      ) : <Text style={styles.sectionCaption}>{tr("Создай период в разделе «Периоды».")}</Text>}
       <Text style={styles.sectionCaption}>
         {averageMode === 'time'
-          ? `${averageLabel} · ${stats.count} из ${allMeasurements.length} записей`
-          : selectedPhase ? `${selectedPhase.title} · весь период · ${stats.count} записей` : 'Нет периодов для расчёта'}
+          ? tr`${tr(averageLabel ?? '')} · ${stats.count} из ${allMeasurements.length} записей`
+          : selectedPhase ? tr`${selectedPhase.title} · весь период · ${stats.count} записей` : tr('Нет периодов для расчёта')}
       </Text>
       <View style={styles.averageGrid}>
         <View style={[styles.averageCard, { backgroundColor: Palette.coralSoft }]}>
           <IconSymbol name="arrow.up.circle" size={22} color={Palette.coral} />
           <Text style={styles.averageValue}>{hasAverageData ? stats.systolic : '—'}</Text>
-          <Text style={styles.averageLabel}>Систолическое</Text>
-          <Text style={styles.averageUnit}>мм рт. ст.</Text>
+          <Text style={styles.averageLabel}>{tr("Систолическое")}</Text>
+          <Text style={styles.averageUnit}>{tr("мм рт. ст.")}</Text>
         </View>
         <View style={[styles.averageCard, { backgroundColor: Palette.orangeSoft }]}>
           <IconSymbol name="arrow.down.circle" size={22} color={Palette.orange} />
           <Text style={styles.averageValue}>{hasAverageData ? stats.diastolic : '—'}</Text>
-          <Text style={styles.averageLabel}>Диастолическое</Text>
-          <Text style={styles.averageUnit}>мм рт. ст.</Text>
+          <Text style={styles.averageLabel}>{tr("Диастолическое")}</Text>
+          <Text style={styles.averageUnit}>{tr("мм рт. ст.")}</Text>
         </View>
         <View style={styles.averageCard}>
           <IconSymbol name="waveform.path.ecg" size={22} color="#6D78A8" />
           <Text style={styles.averageValue}>{hasAverageData ? stats.pulse : '—'}</Text>
-          <Text style={styles.averageLabel}>Пульс</Text>
-          <Text style={styles.averageUnit}>уд/мин</Text>
+          <Text style={styles.averageLabel}>{tr("Пульс")}</Text>
+          <Text style={styles.averageUnit}>{tr("уд/мин")}</Text>
         </View>
         <View style={[styles.averageCard, { backgroundColor: '#FFF8E9' }]}>
           <View style={styles.numberIcon}>
             <Text style={styles.numberIconText}>10</Text>
           </View>
           <Text style={styles.averageValue}>{hasAverageData ? stats.wellbeing : '—'}</Text>
-          <Text style={styles.averageLabel}>Самочувствие</Text>
-          <Text style={styles.averageUnit}>из 10</Text>
+          <Text style={styles.averageLabel}>{tr("Самочувствие")}</Text>
+          <Text style={styles.averageUnit}>{tr("из 10")}</Text>
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Диапазон</Text>
+      <Text style={styles.sectionTitle}>{tr("Диапазон")}</Text>
       <Text style={styles.sectionCaption}>
-        {selected.label} · {measurements.length} из {allMeasurements.length} записей
-      </Text>
+        {tr(selected.label)} · {measurements.length}{tr(" из ")}{allMeasurements.length}{tr(" записей ")}</Text>
       <GlassCard contentStyle={styles.rangeCard}>
         <View style={styles.rangeRow}>
           <View>
-            <Text style={styles.rangeLabel}>Систолическое</Text>
-            <Text style={styles.rangeUnit}>минимум — максимум</Text>
+            <Text style={styles.rangeLabel}>{tr("Систолическое")}</Text>
+            <Text style={styles.rangeUnit}>{tr("минимум — максимум")}</Text>
           </View>
           <Text style={styles.rangeValue}>
             {hasData ? `${Math.min(...systolic)} — ${Math.max(...systolic)}` : '—'}
@@ -211,8 +215,8 @@ export default function StatisticsScreen() {
         <View style={styles.divider} />
         <View style={styles.rangeRow}>
           <View>
-            <Text style={styles.rangeLabel}>Диастолическое</Text>
-            <Text style={styles.rangeUnit}>минимум — максимум</Text>
+            <Text style={styles.rangeLabel}>{tr("Диастолическое")}</Text>
+            <Text style={styles.rangeUnit}>{tr("минимум — максимум")}</Text>
           </View>
           <Text style={styles.rangeValue}>
             {hasData ? `${Math.min(...diastolic)} — ${Math.max(...diastolic)}` : '—'}
@@ -221,8 +225,8 @@ export default function StatisticsScreen() {
         <View style={styles.divider} />
         <View style={styles.rangeRow}>
           <View>
-            <Text style={styles.rangeLabel}>Пульс</Text>
-            <Text style={styles.rangeUnit}>минимум — максимум</Text>
+            <Text style={styles.rangeLabel}>{tr("Пульс")}</Text>
+            <Text style={styles.rangeUnit}>{tr("минимум — максимум")}</Text>
           </View>
           <Text style={styles.rangeValue}>
             {hasData ? `${Math.min(...pulse)} — ${Math.max(...pulse)}` : '—'}

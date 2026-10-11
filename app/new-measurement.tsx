@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import Slider from '@react-native-community/slider';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
@@ -18,7 +22,6 @@ import { SaveSuccessOverlay } from '@/components/save-success-overlay';
 import { ScreenShell } from '@/components/screen-shell';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, Radius, Shadow, Spacing } from '@/constants/design';
-import { runAutoBackup } from '@/data/auto-backup';
 import { addMeasurement } from '@/data/database';
 import type { MeasurementMode } from '@/types/measurement';
 import { emptyMeasurementEntry, isEntryComplete, isEntryValid, readingsFromEntries } from '@/constants/measurement-entry';
@@ -26,6 +29,7 @@ import type { MeasurementEntryDraft } from '@/constants/measurement-entry';
 import { WELLBEING_TAGS } from '@/types/measurement';
 
 export default function NewMeasurementScreen() {
+  useLanguage();
   const db = useSQLiteContext();
   const [mode, setMode] = useState<MeasurementMode>('single');
   const [single, setSingle] = useState<MeasurementEntryDraft>(emptyMeasurementEntry);
@@ -50,11 +54,11 @@ export default function NewMeasurementScreen() {
   function addToSeries() {
     if (saving) return;
     if (!isEntryValid(single)) {
-      Alert.alert('Проверь замер', 'Заполни давление и пульс. Систолическое должно быть выше диастолического.');
+      Alert.alert(tr('Проверь замер'), tr('Заполни давление и пульс. Систолическое должно быть выше диастолического.'));
       return;
     }
     if (series.length >= 3 || !series.every(isEntryValid)) {
-      Alert.alert('Проверь серию', 'Заверши добавленные замеры в разделе «Серия». В серии может быть не больше трёх замеров.');
+      Alert.alert(tr('Проверь серию'), tr('Заверши добавленные замеры в разделе «Серия». В серии может быть не больше трёх замеров.'));
       return;
     }
     const id = ++nextEntryId.current;
@@ -83,26 +87,24 @@ export default function NewMeasurementScreen() {
   async function save() {
     if (saving) return;
     if (mode === 'series' && (series.length < 2 || series.length > 3)) {
-      Alert.alert('Проверь серию', 'В серии должно быть от двух до трёх замеров.');
+      Alert.alert(tr('Проверь серию'), tr('В серии должно быть от двух до трёх замеров.'));
       return;
     }
     if (entries.some((entry) => !isEntryComplete(entry))) {
-      Alert.alert('Не хватает данных', 'Заполни показатели каждого добавленного замера или удали незаполненный замер.');
+      Alert.alert(tr('Не хватает данных'), tr('Заполни показатели каждого добавленного замера или удали незаполненный замер.'));
       return;
     }
     if (entries.some((entry) => !isEntryValid(entry))) {
-      Alert.alert('Проверь значения', 'Систолическое давление должно быть выше диастолического.');
+      Alert.alert(tr('Проверь значения'), tr('Систолическое давление должно быть выше диастолического.'));
       return;
     }
 
     try {
       setSaving(true);
       await addMeasurement(db, { measuredAt: entries[0].measuredAt, wellbeing, tags, note, mode, readings: readingsFromEntries(entries) });
-      // Копия обновляется в фоне и никогда не бросает исключение — экран её не ждёт.
-      void runAutoBackup(db);
       setSaved(true);
     } catch {
-      Alert.alert('Не получилось сохранить', 'Попробуй ещё раз.');
+      Alert.alert(tr('Не получилось сохранить'), tr('Попробуй ещё раз.'));
       setSaving(false);
     }
   }
@@ -112,15 +114,15 @@ export default function NewMeasurementScreen() {
       <ScreenShell contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Pressable
-            accessibilityLabel="Закрыть"
+            accessibilityLabel={tr("Закрыть")}
             hitSlop={12}
             onPress={() => router.back()}
             style={styles.closeButton}>
             <IconSymbol name="xmark" size={20} color={Palette.text} />
           </Pressable>
           <View style={styles.headerText}>
-            <Text style={styles.title}>Новое измерение</Text>
-            <Text style={styles.subtitle}>Добавь показатели тонометра</Text>
+            <Text style={styles.title}>{tr("Новое измерение")}</Text>
+            <Text style={styles.subtitle}>{tr("Добавь показатели тонометра")}</Text>
           </View>
           <View style={styles.headerSpacer} />
         </View>
@@ -137,7 +139,7 @@ export default function NewMeasurementScreen() {
                 onPress={() => switchMode(item)}
                 style={[styles.segmentItem, selected && styles.segmentSelected]}>
                 <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
-                  {item === 'single' ? 'Один замер' : 'Серия'}
+                  {item === 'single' ? tr('Один замер') : tr('Серия')}
                 </Text>
               </Pressable>
             );
@@ -153,7 +155,7 @@ export default function NewMeasurementScreen() {
               onPress={addToSeries}
               style={({ pressed }) => [styles.seriesButton, styles.singleSeriesButton, pressed && styles.pressed]}>
               <IconSymbol name="plus" size={19} color={Palette.coral} />
-              <Text style={styles.seriesButtonText}>Добавить в серию</Text>
+              <Text style={styles.seriesButtonText}>{tr("Добавить в серию")}</Text>
             </Pressable>
           </>
         ) : (
@@ -161,16 +163,16 @@ export default function NewMeasurementScreen() {
             {series.length === 0 ? (
               <Pressable accessibilityRole="button" disabled={saving} onPress={addAnother} style={styles.seriesButton}>
                 <IconSymbol name="plus" size={19} color={Palette.coral} />
-                <Text style={styles.seriesButtonText}>Добавить замер</Text>
+                <Text style={styles.seriesButtonText}>{tr("Добавить замер")}</Text>
               </Pressable>
             ) : null}
             {series.map((entry, index) => (
               <View key={entry.id} style={styles.seriesEntry}>
                 <View style={styles.seriesEntryHeader}>
-                  <Text style={styles.seriesEntryTitle}>Замер {index + 1}</Text>
+                  <Text style={styles.seriesEntryTitle}>{tr("Замер ")}{index + 1}</Text>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Удалить замер ${index + 1}`}
+                    accessibilityLabel={tr`Удалить замер ${index + 1}`}
                     disabled={saving}
                     hitSlop={10}
                     onPress={() => setSeries((items) => items.filter((item) => item.id !== entry.id))}>
@@ -187,22 +189,22 @@ export default function NewMeasurementScreen() {
             {series.length > 0 && canAddAnother ? (
               <Pressable accessibilityRole="button" disabled={saving} onPress={addAnother} style={styles.seriesButton}>
                 <IconSymbol name="plus" size={19} color={Palette.coral} />
-                <Text style={styles.seriesButtonText}>Добавить ещё 1 замер</Text>
+                <Text style={styles.seriesButtonText}>{tr("Добавить ещё 1 замер")}</Text>
               </Pressable>
             ) : null}
             <Text style={styles.seriesHint}>
-              {series.length === 3 ? 'Добавлены три замера. Заполни показатели и сохрани серию.' : 'В серии 2–3 замера. Следующий можно добавить после заполнения предыдущего.'}
+              {series.length === 3 ? tr('Добавлены три замера. Заполни показатели и сохрани серию.') : tr('В серии 2–3 замера. Следующий можно добавить после заполнения предыдущего.')}
             </Text>
-            <Text style={styles.seriesHint}>Дата серии — дата первого замера. Самочувствие и заметка общие для серии.</Text>
+            <Text style={styles.seriesHint}>{tr("Дата серии — дата первого замера. Самочувствие и заметка общие для серии.")}</Text>
           </View>
         )}
 
-        <Text style={styles.sectionLabel}>САМОЧУВСТВИЕ</Text>
+        <Text style={styles.sectionLabel}>{tr("САМОЧУВСТВИЕ")}</Text>
         <GlassCard contentStyle={styles.wellbeingCard}>
           <View style={styles.wellbeingHeader}>
             <View>
-              <Text style={styles.wellbeingTitle}>Самочувствие</Text>
-              <Text style={styles.wellbeingHint}>Как ты себя чувствуешь?</Text>
+              <Text style={styles.wellbeingTitle}>{tr("Самочувствие")}</Text>
+              <Text style={styles.wellbeingHint}>{tr("Как ты себя чувствуешь?")}</Text>
             </View>
             <View style={styles.score}>
               <Text style={styles.scoreNumber}>{wellbeing}</Text>
@@ -210,7 +212,7 @@ export default function NewMeasurementScreen() {
             </View>
           </View>
           <Slider
-            accessibilityLabel="Оценка самочувствия"
+            accessibilityLabel={tr("Оценка самочувствия")}
             maximumTrackTintColor="#E4E6EA"
             maximumValue={10}
             minimumTrackTintColor={Palette.coral}
@@ -222,8 +224,8 @@ export default function NewMeasurementScreen() {
             value={wellbeing}
           />
           <View style={styles.scaleLabels}>
-            <Text style={styles.scaleLabel}>Плохо</Text>
-            <Text style={styles.scaleLabel}>Отлично</Text>
+            <Text style={styles.scaleLabel}>{tr("Плохо")}</Text>
+            <Text style={styles.scaleLabel}>{tr("Отлично")}</Text>
           </View>
           <View style={styles.tags}>
             {WELLBEING_TAGS.map((tag) => {
@@ -233,20 +235,20 @@ export default function NewMeasurementScreen() {
                   key={tag}
                   onPress={() => toggleTag(tag)}
                   style={[styles.tag, selected && styles.tagSelected]}>
-                  <Text style={[styles.tagText, selected && styles.tagTextSelected]}>{tag}</Text>
+                  <Text style={[styles.tagText, selected && styles.tagTextSelected]}>{tr(tag)}</Text>
                 </Pressable>
               );
             })}
           </View>
         </GlassCard>
 
-        <Text style={styles.sectionLabel}>ЗАМЕТКА</Text>
+        <Text style={styles.sectionLabel}>{tr("ЗАМЕТКА")}</Text>
         <View style={styles.noteCard}>
           <TextInput
-            accessibilityLabel="Заметка к измерению"
+            accessibilityLabel={tr("Заметка к измерению")}
             multiline
             onChangeText={setNote}
-            placeholder="Например: после прогулки, до приёма лекарства…"
+            placeholder={tr("Например: после прогулки, до приёма лекарства…")}
             placeholderTextColor={Palette.subtle}
             style={styles.noteInput}
             textAlignVertical="top"
@@ -255,9 +257,8 @@ export default function NewMeasurementScreen() {
         </View>
 
         {mode === 'series' && completedCount > 0 ? (
-          <Text style={styles.readyText}>
-            Готово измерений: {completedCount}
-            {completedCount < 2 ? ' — нужен ещё один замер' : ''}
+          <Text style={styles.readyText}>{tr(" Готово измерений: ")}{completedCount}
+            {completedCount < 2 ? tr(' — нужен ещё один замер') : ''}
           </Text>
         ) : null}
 
@@ -271,13 +272,13 @@ export default function NewMeasurementScreen() {
             pressed && styles.pressed,
           ]}>
           <IconSymbol name="checkmark" size={21} color={Palette.white} weight="semibold" />
-          <Text style={styles.saveText}>{saving ? 'Сохраняем…' : 'Сохранить измерение'}</Text>
+          <Text style={styles.saveText}>{saving ? tr('Сохраняем…') : tr('Сохранить измерение')}</Text>
         </Pressable>
       </ScreenShell>
 
       <SaveSuccessOverlay
         onDone={() => router.back()}
-        subtitle={mode === 'series' ? 'Серия добавлена в дневник' : 'Измерение добавлено в дневник'}
+        subtitle={mode === 'series' ? tr('Серия добавлена в дневник') : tr('Измерение добавлено в дневник')}
         visible={saved}
       />
 

@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr, formatNumber } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -42,6 +46,7 @@ function ComparisonRow({
   higherIsBetter,
   fractional,
 }: ComparisonRowProps) {
+  useLanguage();
   return (
     <View style={styles.compareRow}>
       <Text style={styles.compareLabel}>{label}</Text>
@@ -56,6 +61,7 @@ function ComparisonRow({
 }
 
 function ComparisonBlock({ phase, baseline }: { phase: PhaseWithStats; baseline: PhaseStats }) {
+  useLanguage();
   const info = phaseKindInfo(phase.kind);
 
   return (
@@ -70,14 +76,14 @@ function ComparisonBlock({ phase, baseline }: { phase: PhaseWithStats; baseline:
         base={`${baseline.systolic}/${baseline.diastolic}`}
         delta={phase.stats.systolic - baseline.systolic}
         higherIsBetter={false}
-        label="Давление"
+        label={tr("Давление")}
       />
       <ComparisonRow
         actual={String(phase.stats.pulse)}
         base={String(baseline.pulse)}
         delta={phase.stats.pulse - baseline.pulse}
         higherIsBetter={false}
-        label="Пульс"
+        label={tr("Пульс")}
       />
       <ComparisonRow
         actual={String(phase.stats.wellbeing)}
@@ -85,13 +91,14 @@ function ComparisonBlock({ phase, baseline }: { phase: PhaseWithStats; baseline:
         delta={phase.stats.wellbeing - baseline.wellbeing}
         fractional
         higherIsBetter
-        label="Самочувствие"
+        label={tr("Самочувствие")}
       />
     </View>
   );
 }
 
 function PhaseCard({ phase }: { phase: PhaseWithStats }) {
+  useLanguage();
   const info = phaseKindInfo(phase.kind);
   const open = phase.endedAt === null;
 
@@ -108,7 +115,7 @@ function PhaseCard({ phase }: { phase: PhaseWithStats }) {
           </View>
           {open ? (
             <View style={styles.liveChip}>
-              <Text style={styles.liveChipText}>идёт сейчас</Text>
+              <Text style={styles.liveChipText}>{tr("идёт сейчас")}</Text>
             </View>
           ) : null}
         </View>
@@ -126,19 +133,19 @@ function PhaseCard({ phase }: { phase: PhaseWithStats }) {
               <Text style={styles.cardStatValue}>
                 {phase.stats.systolic}/{phase.stats.diastolic}
               </Text>
-              <Text style={styles.cardStatLabel}>мм рт. ст.</Text>
+              <Text style={styles.cardStatLabel}>{tr("мм рт. ст.")}</Text>
             </View>
             <View style={styles.cardStat}>
               <Text style={styles.cardStatValue}>{phase.stats.pulse}</Text>
-              <Text style={styles.cardStatLabel}>пульс</Text>
+              <Text style={styles.cardStatLabel}>{tr("пульс")}</Text>
             </View>
             <View style={styles.cardStat}>
-              <Text style={styles.cardStatValue}>{phase.stats.wellbeing}</Text>
-              <Text style={styles.cardStatLabel}>самочувствие</Text>
+              <Text style={styles.cardStatValue}>{formatNumber(phase.stats.wellbeing, 1)}</Text>
+              <Text style={styles.cardStatLabel}>{tr("самочувствие")}</Text>
             </View>
           </View>
         ) : (
-          <Text style={styles.cardEmpty}>Пока нет измерений в этом периоде</Text>
+          <Text style={styles.cardEmpty}>{tr("Пока нет измерений в этом периоде")}</Text>
         )}
       </View>
       <IconSymbol
@@ -152,6 +159,7 @@ function PhaseCard({ phase }: { phase: PhaseWithStats }) {
 }
 
 export default function PhasesScreen() {
+  useLanguage();
   const { phases, loading, error, refresh } = usePhases();
   const baseline = cleanBaseline(phases);
   const compared = phases.filter((phase) => phase.kind !== 'clean' && phase.stats.count > 0);
@@ -163,23 +171,18 @@ export default function PhasesScreen() {
 
   return (
     <ScreenShell>
-      <Text style={styles.eyebrow}>ЭКСПЕРИМЕНТЫ</Text>
-      <Text style={styles.title}>Периоды</Text>
-      <Text style={styles.subtitle}>
-        История разбита на отрезки: что именно ты пил в это время. Общий список и графики от этого
-        не меняются.
-      </Text>
+      <Text style={styles.eyebrow}>{tr("ЭКСПЕРИМЕНТЫ")}</Text>
+      <Text style={styles.title}>{tr("Периоды")}</Text>
+      <Text style={styles.subtitle}>{tr(" История разбита на отрезки: что именно ты пил в это время. Общий список и графики от этого не меняются. ")}</Text>
 
-      <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label="периоды" />
+      <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label={tr("периоды")} />
       {!loading && !error && baseline && compared.length > 0 ? (
         <>
-          <Text style={styles.sectionTitle}>Сравнение</Text>
+          <Text style={styles.sectionTitle}>{tr("Сравнение")}</Text>
           <GlassCard contentStyle={styles.compareCard}>
-            <Text style={styles.baselineText}>
-              База — чистые периоды: {baseline.systolic}/{baseline.diastolic}, пульс {baseline.pulse}
-              , самочувствие {baseline.wellbeing}
+            <Text style={styles.baselineText}>{tr(" База — чистые периоды: ")}{baseline.systolic}/{baseline.diastolic}{tr(", пульс ")}{baseline.pulse}{tr(" , самочувствие ")}{formatNumber(baseline.wellbeing, 1)}
             </Text>
-            <Text style={styles.baselineHint}>{pluralRecords(baseline.count)} без напитков</Text>
+            <Text style={styles.baselineHint}>{pluralRecords(baseline.count)}{tr(" без напитков")}</Text>
             {compared.map((phase) => (
               <ComparisonBlock baseline={baseline} key={phase.id} phase={phase} />
             ))}
@@ -187,7 +190,7 @@ export default function PhasesScreen() {
         </>
       ) : null}
 
-      <Text style={styles.sectionTitle}>Все периоды</Text>
+      <Text style={styles.sectionTitle}>{tr("Все периоды")}</Text>
       <View style={styles.list}>
         {phases.map((phase) => (
           <PhaseCard key={phase.id} phase={phase} />
@@ -196,10 +199,8 @@ export default function PhasesScreen() {
 
       {!loading && !error && phases.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Периодов пока нет</Text>
-          <Text style={styles.emptyText}>
-            Создай первый — например, «Без всего» — и история начнёт делиться на эксперименты.
-          </Text>
+          <Text style={styles.emptyTitle}>{tr("Периодов пока нет")}</Text>
+          <Text style={styles.emptyText}>{tr(" Создай первый — например, «Без всего» — и история начнёт делиться на эксперименты. ")}</Text>
         </View>
       ) : null}
 
@@ -210,7 +211,7 @@ export default function PhasesScreen() {
         <View style={styles.addIcon}>
           <IconSymbol name="plus" size={20} color={Palette.coral} weight="semibold" />
         </View>
-        <Text style={styles.addText}>Начать новый период</Text>
+        <Text style={styles.addText}>{tr("Начать новый период")}</Text>
       </Pressable>
     </ScreenShell>
   );

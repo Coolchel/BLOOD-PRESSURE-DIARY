@@ -1,0 +1,7 @@
+{
+  "platforms": ["ios", "android"],
+  "apple": {
+    "modules": ["DiaryBackupModule"]
+  },
+  "android": { "modules": ["expo.modules.diarybackup.DiaryBackupModule"] }
+}

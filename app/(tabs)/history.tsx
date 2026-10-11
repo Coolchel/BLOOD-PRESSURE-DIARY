@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -17,6 +21,7 @@ import { usePhaseList } from '@/hooks/use-phases';
 import { findPhaseFor } from '@/types/experiment';
 
 export default function HistoryScreen() {
+  useLanguage();
   const [limit, setLimit] = useState(200);
   const [filters, setFilters] = useState<HistoryFilterState>(DEFAULT_HISTORY_FILTERS);
   const [filtersVisible, setFiltersVisible] = useState(false);
@@ -29,20 +34,20 @@ export default function HistoryScreen() {
       <ScreenShell>
         <View style={styles.header}>
           <View>
-            <Text style={styles.eyebrow}>ВСЕ ЗАПИСИ</Text>
-            <Text style={styles.title}>История</Text>
+            <Text style={styles.eyebrow}>{tr("ВСЕ ЗАПИСИ")}</Text>
+            <Text style={styles.title}>{tr("История")}</Text>
           </View>
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Фильтры истории"
+              accessibilityLabel={tr("Фильтры истории")}
               accessibilityState={{ expanded: filtersVisible }}
               onPress={() => setFiltersVisible(true)}
               style={({ pressed }) => [styles.filterButton, hasFilters && styles.filterActive, pressed && styles.pressed]}>
               <IconSymbol name="line.3.horizontal.decrease" size={23} color={Palette.coral} />
             </Pressable>
             <Pressable
-              accessibilityLabel="Добавить измерение"
+              accessibilityLabel={tr("Добавить измерение")}
               onPress={() => {
                 void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 router.push('/new-measurement');
@@ -55,11 +60,11 @@ export default function HistoryScreen() {
 
         <View style={styles.summary}>
           <Text style={styles.count}>{pluralRecords(total)}</Text>
-          <Text style={styles.countLabel}>{hasFilters ? 'по фильтрам' : 'сохранено'}</Text>
+          <Text style={styles.countLabel}>{hasFilters ? tr('по фильтрам') : tr('сохранено')}</Text>
         </View>
         {hasFilters ? <Text style={styles.filterCaption}>{historyFilterLabel(filters)}</Text> : null}
 
-        {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label="метки периодов" /> : null}
+        {phaseError ? <DataLoadState loading={phaseLoading} error={phaseError} onRetry={() => void refreshPhases()} label={tr("метки периодов")} /> : null}
         <View style={styles.list}>
           {measurements.map((measurement) => (
             <MeasurementCard
@@ -78,7 +83,7 @@ export default function HistoryScreen() {
 
         {error ? (
           <Pressable accessibilityRole="button" onPress={() => void refresh()} style={styles.loadMore}>
-            <Text style={styles.emptyText}>Не удалось загрузить записи. Повторить</Text>
+            <Text style={styles.emptyText}>{tr("Не удалось загрузить записи. Повторить")}</Text>
           </Pressable>
         ) : measurements.length < total ? (
           <Pressable
@@ -87,15 +92,15 @@ export default function HistoryScreen() {
             onPress={() => setLimit((current) => current + 200)}
             style={styles.loadMore}>
             <Text style={styles.emptyText}>
-              {loading ? 'Загружаем…' : `Показать ещё · ${measurements.length} из ${total}`}
+              {loading ? tr('Загружаем…') : tr`Показать ещё · ${measurements.length} из ${total}`}
             </Text>
           </Pressable>
         ) : null}
 
         {!loading && !error && measurements.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>{hasFilters ? 'Нет записей по выбранным фильтрам' : 'История пока пустая'}</Text>
-            <Text style={styles.emptyText}>{hasFilters ? 'Измени период в фильтрах истории.' : 'Добавь первое измерение, и оно появится здесь.'}</Text>
+            <Text style={styles.emptyTitle}>{hasFilters ? tr('Нет записей по выбранным фильтрам') : tr('История пока пустая')}</Text>
+            <Text style={styles.emptyText}>{hasFilters ? tr('Измени период в фильтрах истории.') : tr('Добавь первое измерение, и оно появится здесь.')}</Text>
           </View>
         ) : null}
       </ScreenShell>

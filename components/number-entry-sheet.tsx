@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -39,6 +43,7 @@ export function NumberEntrySheet({
   onCancel,
   onSubmit,
 }: NumberEntrySheetProps) {
+  useLanguage();
   const [value, setValue] = useState('');
   const [replaceOnNextKey, setReplaceOnNextKey] = useState(false);
   const translateY = useRef(new Animated.Value(520)).current;
@@ -100,7 +105,7 @@ export function NumberEntrySheet({
       transparent
       visible={visible}>
       <View style={styles.modal}>
-        <Pressable accessibilityLabel="Закрыть" onPress={onCancel} style={styles.backdrop} />
+        <Pressable accessibilityLabel={tr("Закрыть")} onPress={onCancel} style={styles.backdrop} />
         <Animated.View
           style={[
             styles.sheet,
@@ -109,7 +114,7 @@ export function NumberEntrySheet({
           <View style={styles.handle} />
           <View style={styles.sheetHeader}>
             <Pressable onPress={onCancel} hitSlop={12}>
-              <Text style={styles.cancel}>Отмена</Text>
+              <Text style={styles.cancel}>{tr("Отмена")}</Text>
             </Pressable>
             <Text style={styles.title}>{title}</Text>
             <View style={styles.headerSpacer} />
@@ -119,8 +124,7 @@ export function NumberEntrySheet({
             <Text style={[styles.displayValue, !value && styles.displayEmpty]}>{value || '—'}</Text>
             <Text style={styles.unit}>{unit}</Text>
           </View>
-          <Text style={[styles.range, value.length > 0 && !isValid && styles.rangeError]}>
-            Допустимо: {min}–{max}
+          <Text style={[styles.range, value.length > 0 && !isValid && styles.rangeError]}>{tr(" Допустимо: ")}{min}–{max}
           </Text>
 
           <View style={styles.keypad}>
@@ -130,7 +134,7 @@ export function NumberEntrySheet({
               ) : (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={key === 'delete' ? 'Удалить цифру' : key}
+                  accessibilityLabel={key === 'delete' ? tr('Удалить цифру') : key}
                   key={key}
                   onPress={() => handleKey(key)}
                   style={({ pressed }) => [

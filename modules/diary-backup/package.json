@@ -1,0 +1,6 @@
+{
+  "name": "diary-backup",
+  "version": "1.0.0",
+  "description": "Persistent access to the user-selected diary backup folder on iOS",
+  "license": "0BSD"
+}

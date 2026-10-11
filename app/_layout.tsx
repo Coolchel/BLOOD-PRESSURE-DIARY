@@ -3,18 +3,26 @@ import { Stack } from 'expo-router';
 import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import 'react-native-reanimated';
 
 import { Palette } from '@/constants/design';
 import { runAutoBackup } from '@/data/auto-backup';
 import { initializeDatabase } from '@/data/database';
+import { LanguageProvider } from '@/localization/provider';
 
-/** Обновляет копию в «Файлах» при каждом запуске — на случай, если измерения добавляли давно. */
+/** Проверяет суточный интервал при запуске и возвращении в приложение. */
 function AutoBackupOnLaunch() {
   const db = useSQLiteContext();
 
   useEffect(() => {
     void runAutoBackup(db);
+    let previous = AppState.currentState;
+    const listener = AppState.addEventListener('change', next => {
+      if (next === 'active' && previous !== 'active') void runAutoBackup(db);
+      previous = next;
+    });
+    return () => listener.remove();
   }, [db]);
 
   return null;
@@ -40,6 +48,7 @@ export default function RootLayout() {
   return (
     <SQLiteProvider databaseName="blood-pressure-diary.db" onInit={initializeDatabase}>
       <AutoBackupOnLaunch />
+      <LanguageProvider>
       <ThemeProvider value={navigationTheme}>
         <Stack screenOptions={{ contentStyle: { backgroundColor: Palette.background } }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -70,6 +79,7 @@ export default function RootLayout() {
         </Stack>
         <StatusBar style="dark" />
       </ThemeProvider>
+      </LanguageProvider>
     </SQLiteProvider>
   );
 }

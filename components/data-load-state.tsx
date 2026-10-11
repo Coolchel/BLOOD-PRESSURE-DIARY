@@ -1,22 +1,27 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Palette, Radius, Spacing } from '@/constants/design';
 
-export function DataLoadState({ loading, error, onRetry, label = 'данные' }: {
+export function DataLoadState({ loading, error, onRetry, label = tr('данные') }: {
   loading: boolean;
   error: boolean;
   onRetry: () => void;
   label?: string;
 }) {
+  useLanguage();
   if (!loading && !error) return null;
   return (
     <View style={styles.container} accessibilityLiveRegion="polite">
       <Text style={styles.message}>
-        {loading ? `Загружаем ${label}…` : `Не удалось загрузить ${label}.`}
+        {loading ? tr`Загружаем ${label}…` : tr`Не удалось загрузить ${label}.`}
       </Text>
       {!loading && error ? (
         <Pressable accessibilityRole="button" onPress={onRetry} style={styles.retry}>
-          <Text style={styles.retryText}>Повторить</Text>
+          <Text style={styles.retryText}>{tr("Повторить")}</Text>
         </Pressable>
       ) : null}
     </View>

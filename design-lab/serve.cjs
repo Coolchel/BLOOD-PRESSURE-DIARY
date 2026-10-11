@@ -3,10 +3,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = __dirname;
 const port = Number(process.env.DIARY_DESIGN_PORT || 43821);
+const { createLocalBackups, createBackupHandler } = require('./local-backups.cjs');
+const backupHandler = createBackupHandler(createLocalBackups(), port);
 const types = { '.html':'text/html; charset=utf-8', '.css':'text/css; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.json':'application/json; charset=utf-8', '.svg':'image/svg+xml', '.png':'image/png', '.txt':'text/plain; charset=utf-8' };
-const server = http.createServer((req,res) => {
+const server = http.createServer(async (req,res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
+    if (await backupHandler(req, res, url)) return;
     const filename = path.resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
     if (!filename.startsWith(root + path.sep)) { res.writeHead(403); res.end(); return; }
     if (!['GET','HEAD'].includes(req.method)) { res.writeHead(405); res.end(); return; }

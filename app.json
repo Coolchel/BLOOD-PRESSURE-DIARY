@@ -15,7 +15,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIFileSharingEnabled": true,
-        "LSSupportsOpeningDocumentsInPlace": true
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "CFBundleDevelopmentRegion": "en"
       }
     },
     "android": {
@@ -40,7 +41,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#F5F6F9"
         }
-      ]
+      ],
+      ["expo-localization", { "supportedLocales": ["ru", "en", "fr", "es", "de"] }]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import React from 'react';
@@ -8,6 +12,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette } from '@/constants/design';
 
 export default function TabLayout() {
+  useLanguage();
   return (
     <Tabs
       screenOptions={{
@@ -32,21 +37,21 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Главная',
+          title: tr('Главная'),
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
-          title: 'История',
+          title: tr('История'),
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="clock.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="statistics"
         options={{
-          title: 'Статистика',
+          title: tr('Статистика'),
           tabBarIcon: ({ color }) => (
             <IconSymbol size={22} name="chart.line.uptrend.xyaxis" color={color} />
           ),
@@ -55,14 +60,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="phases"
         options={{
-          title: 'Периоды',
+          title: tr('Периоды'),
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="testtube.2" color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Настройки',
+          title: tr('Настройки'),
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="gearshape.fill" color={color} />,
         }}
       />

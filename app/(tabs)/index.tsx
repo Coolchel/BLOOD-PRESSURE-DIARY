@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr, getLocale } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -13,6 +17,7 @@ import { measurementStats } from '@/constants/measurement-stats';
 import { useMeasurements } from '@/hooks/use-measurements';
 
 export default function HomeScreen() {
+  useLanguage();
   const { measurements, loading, error, refresh } = useMeasurements(12);
   const latest = measurements[0];
   const recent = measurements;
@@ -29,10 +34,10 @@ export default function HomeScreen() {
   if (loading || error) {
     return (
       <ScreenShell>
-        <Text style={styles.title}>Давление</Text>
-        <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label="измерения" />
+        <Text style={styles.title}>{tr("Давление")}</Text>
+        <DataLoadState loading={loading} error={error} onRetry={() => void refresh()} label={tr("измерения")} />
         <Pressable accessibilityRole="button" onPress={addMeasurement} style={styles.addButton}>
-          <Text style={styles.addText}>Новое измерение</Text>
+          <Text style={styles.addText}>{tr("Новое измерение")}</Text>
         </Pressable>
       </ScreenShell>
     );
@@ -42,16 +47,16 @@ export default function HomeScreen() {
     <ScreenShell>
       <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>ДНЕВНИК ЗДОРОВЬЯ</Text>
-          <Text style={styles.title}>Давление</Text>
+          <Text style={styles.eyebrow}>{tr("ДНЕВНИК ЗДОРОВЬЯ")}</Text>
+          <Text style={styles.title}>{tr("Давление")}</Text>
         </View>
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Последнее измерение</Text>
+        <Text style={styles.sectionTitle}>{tr("Последнее измерение")}</Text>
         {latest ? (
           <Text style={styles.sectionMeta}>
-            {new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(
+            {new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(
               new Date(latest.measuredAt),
             )}
           </Text>
@@ -67,8 +72,8 @@ export default function HomeScreen() {
         />
       ) : (
         <GlassCard contentStyle={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Пока нет измерений</Text>
-          <Text style={styles.emptyText}>Добавьте первую запись — это займёт меньше минуты.</Text>
+          <Text style={styles.emptyTitle}>{tr("Пока нет измерений")}</Text>
+          <Text style={styles.emptyText}>{tr("Добавьте первую запись — это займёт меньше минуты.")}</Text>
         </GlassCard>
       )}
 
@@ -79,36 +84,36 @@ export default function HomeScreen() {
         <View style={styles.addIcon}>
           <IconSymbol name="plus" size={22} color={Palette.coral} weight="semibold" />
         </View>
-        <Text style={styles.addText}>Новое измерение</Text>
+        <Text style={styles.addText}>{tr("Новое измерение")}</Text>
       </Pressable>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Динамика</Text>
-        <Text style={styles.sectionMeta}>{recent.length} измерений</Text>
+        <Text style={styles.sectionTitle}>{tr("Динамика")}</Text>
+        <Text style={styles.sectionMeta}>{recent.length}{tr(" измерений")}</Text>
       </View>
       <GlassCard contentStyle={styles.chartCard}>
         <WeeklyChart maxPoints={12} measurements={recent} pointSpacing="uniform" />
       </GlassCard>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Средние значения</Text>
-        <Text style={styles.sectionMeta}>последние {recent.length || 12}</Text>
+        <Text style={styles.sectionTitle}>{tr("Средние значения")}</Text>
+        <Text style={styles.sectionMeta}>{tr("последние ")}{recent.length || 12}</Text>
       </View>
       <View style={styles.statsRow}>
         <View style={[styles.statCard, styles.statCoral]}>
           <IconSymbol name="arrow.up.circle" size={20} color={Palette.coral} />
           <Text style={styles.statValue}>{average?.systolic ?? '—'}</Text>
-          <Text style={styles.statLabel}>Систолическое</Text>
+          <Text style={styles.statLabel}>{tr("Систолическое")}</Text>
         </View>
         <View style={[styles.statCard, styles.statOrange]}>
           <IconSymbol name="arrow.down.circle" size={20} color={Palette.orange} />
           <Text style={styles.statValue}>{average?.diastolic ?? '—'}</Text>
-          <Text style={styles.statLabel}>Диастолическое</Text>
+          <Text style={styles.statLabel}>{tr("Диастолическое")}</Text>
         </View>
         <View style={styles.statCard}>
           <IconSymbol name="waveform.path.ecg" size={20} color="#6D78A8" />
           <Text style={styles.statValue}>{average?.pulse ?? '—'}</Text>
-          <Text style={styles.statLabel}>Пульс</Text>
+          <Text style={styles.statLabel}>{tr("Пульс")}</Text>
         </View>
       </View>
     </ScreenShell>

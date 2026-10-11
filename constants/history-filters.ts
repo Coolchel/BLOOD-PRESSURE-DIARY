@@ -1,4 +1,5 @@
 import type { MeasurementQuery, MeasurementSort } from '@/types/measurement';
+import { getLocale, tr } from '@/localization';
 
 export type HistoryFilterState = {
   sort: MeasurementSort;
@@ -38,12 +39,12 @@ export function historyQuery(filters: HistoryFilterState): MeasurementQuery {
 }
 
 export function historyFilterLabel(filters: HistoryFilterState) {
-  const date = (value: Date) => new Intl.DateTimeFormat('ru-RU', {
+  const date = (value: Date) => new Intl.DateTimeFormat(getLocale(), {
     day: '2-digit', month: '2-digit', year: 'numeric',
   }).format(value);
   const period = filters.startDate && filters.endDate
     ? `${date(filters.startDate)} — ${date(filters.endDate)}`
-    : filters.startDate ? `С ${date(filters.startDate)}`
-    : filters.endDate ? `По ${date(filters.endDate)}` : 'Все даты';
-  return `${HISTORY_SORTS.find((item) => item.key === filters.sort)?.label} · ${period}`;
+    : filters.startDate ? tr`С ${date(filters.startDate)}`
+    : filters.endDate ? tr`По ${date(filters.endDate)}` : tr('Все даты');
+  return `${tr(HISTORY_SORTS.find((item) => item.key === filters.sort)?.label ?? '')} · ${period}`;
 }

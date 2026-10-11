@@ -401,16 +401,37 @@
       const readings = Array.from({length:n},(_,j) => ({ systolic:systolic+(j===0&&n>1?4:-j),diastolic:diastolic+(j===0&&n>1?2:0),pulse:pulse+j,measuredAt:new Date(time+j*120000).toISOString() }));
       sessions.push({ id:i+1,measuredAt:readings[0].measuredAt,wellbeing:coffee?6+(i%3):7+(i%3),tags:coffee?['После кофе']:['Спокойно'],note:i%8===0?'После отдыха. Измерение сидя.':'',mode:n===1?'single':'series',readings });
     }
-    return { schema:1,sessions,phases,autoBackup:true,lastBackup:null,copies:[],draft:null };
+    return { schema:1,sessions,phases,autoBackup:true,lastBackup:null,backupCopy:null,backupFolder:'',draft:null };
   }
-  function withAutoBackup(state,now=Date.now()) {
-    const next = clone(state);
-    if (!next.autoBackup || !next.sessions.length) return next;
-    const stamp = new Date(now).toISOString();
-    const day = new Date(now); const date = [day.getFullYear(),String(day.getMonth()+1).padStart(2,'0'),String(day.getDate()).padStart(2,'0')].join('-');
-    next.lastBackup=stamp;
-    next.copies=[{ date,at:stamp,payload:backup(next) },...(next.copies||[]).filter(c=>c.date!==date)].slice(0,7);
+  function normalizeBackupState(state) {
+    const next=clone(state);
+    if(next.backupCopy===undefined){
+      const copies=Array.isArray(next.copies)?next.copies:[];
+      next.backupCopy=clone(copies.filter(c=>c&&c.payload).sort((a,b)=>Date.parse(b.at||b.date)-Date.parse(a.at||a.date))[0]||null);
+    }
+    delete next.copies;
+    next.lastBackup=next.backupCopy?.at||null;
+    next.backupFolder=typeof next.backupFolder==='string'?next.backupFolder.trim().slice(0,160):'';
     return next;
   }
-  return { DAY,MAX_SERIES_READINGS,MAX_CONCURRENT_PHASES,TAGS,KINDS,PHASE_ICONS,PHASE_COLORS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,statisticsSummary,inside,phaseFor,phasesFor,phaseAppearance,phaseStatus,phaseLimitConflict,historyInterval,filter,ranges,savePhase,finishPhase,baseline,chartPoints,statisticsWindow,statisticsPreferences,statisticsChartPoints,statisticsExtremes,statisticsComparison,backup,restore,seed,withAutoBackup,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
+  function backupFacts(payload) {
+    const sessions=payload.sessions||[];
+    return {records:sessions.length,readings:(payload.readings||[]).length,
+      series:sessions.filter(s=>s.mode==='series').length,
+      days:new Set(sessions.map(s=>localDay(s.measured_at))).size,periods:(payload.phases||[]).length};
+  }
+  function factoryState() {
+    return {schema:1,sessions:[],phases:[],autoBackup:true,lastBackup:null,backupCopy:null,backupFolder:'',draft:null,drafts:{single:null,series:null},draftMode:'single'};
+  }
+  function withAutoBackup(state,now=Date.now()) {
+    const next = normalizeBackupState(state);
+    if (!next.autoBackup || !next.sessions.length) return next;
+    const previous=Date.parse(next.lastBackup);
+    if(Number.isFinite(previous)&&now-previous<DAY)return next;
+    const stamp = new Date(now).toISOString();
+    next.lastBackup=stamp;
+    next.backupCopy={at:stamp,payload:{...backup(next),exportedAt:stamp}};
+    return next;
+  }
+  return { DAY,MAX_SERIES_READINGS,MAX_CONCURRENT_PHASES,TAGS,KINDS,PHASE_ICONS,PHASE_COLORS,SORTS,clone,iso,validReading,validateSession,canSaveEntry,entryReadingError,summary,withSessionNote,stats,statisticsSummary,inside,phaseFor,phasesFor,phaseAppearance,phaseStatus,phaseLimitConflict,historyInterval,filter,ranges,savePhase,finishPhase,baseline,chartPoints,statisticsWindow,statisticsPreferences,statisticsChartPoints,statisticsExtremes,statisticsComparison,backup,restore,seed,normalizeBackupState,withAutoBackup,backupFacts,factoryState,newReading,newDraft,readingTimeSource,readingWithInput,entryDrafts,resumeDraft,draftChanged,resumableDraft,storeDraft,switchDraft,clearDraft };
 });

@@ -1,3 +1,7 @@
+'use no memo'; // Re-evaluate shared locale formatters when the language changes.
+
+import { tr, getLocale } from '@/localization';
+import { useLanguage } from '@/localization/provider';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -20,12 +24,13 @@ const METRICS = {
 const METRIC_KEYS: (keyof Reading)[] = ['systolic', 'diastolic', 'pulse'];
 
 function formatMoment(date: Date) {
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
+  return new Intl.DateTimeFormat(getLocale(), { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
 type Props = { value: MeasurementEntryDraft; onChange: (value: MeasurementEntryDraft) => void; disabled?: boolean };
 
 export function MeasurementEntry({ value, onChange, disabled }: Props) {
+  useLanguage();
   const insets = useSafeAreaInsets();
   const [metric, setMetric] = useState<keyof Reading | null>(null);
   const [dateVisible, setDateVisible] = useState(false);
@@ -43,7 +48,7 @@ export function MeasurementEntry({ value, onChange, disabled }: Props) {
 
   return (
     <>
-      <Text style={styles.label}>ПОКАЗАТЕЛИ</Text>
+      <Text style={styles.label}>{tr("ПОКАЗАТЕЛИ")}</Text>
       <GlassCard contentStyle={styles.metrics}>
         {METRIC_KEYS.map((key, index) => (
           <View key={key}>
@@ -52,51 +57,51 @@ export function MeasurementEntry({ value, onChange, disabled }: Props) {
               disabled={disabled}
               icon={METRICS[key].icon}
               iconColor={METRICS[key].color}
-              label={METRICS[key].label}
-              unit={METRICS[key].unit}
+              label={tr(METRICS[key].label)}
+              unit={tr(METRICS[key].unit)}
               value={value.values[key]}
               onPress={() => setMetric(key)}
             />
           </View>
         ))}
       </GlassCard>
-      {isEntryComplete(value) && !isEntryValid(value) ? <Text style={styles.error}>Проверь давление: систолическое должно быть выше диастолического.</Text> : null}
+      {isEntryComplete(value) && !isEntryValid(value) ? <Text style={styles.error}>{tr("Проверь давление: систолическое должно быть выше диастолического.")}</Text> : null}
 
-      <Text style={[styles.label, styles.dateLabel]}>ДАТА И ВРЕМЯ</Text>
-      <Pressable disabled={disabled} accessibilityRole="button" accessibilityLabel={`Дата и время: ${formatMoment(value.measuredAt)}`} onPress={() => setDateVisible(true)} style={styles.dateCard}>
+      <Text style={[styles.label, styles.dateLabel]}>{tr("ДАТА И ВРЕМЯ")}</Text>
+      <Pressable disabled={disabled} accessibilityRole="button" accessibilityLabel={tr`Дата и время: ${formatMoment(value.measuredAt)}`} onPress={() => setDateVisible(true)} style={styles.dateCard}>
         <View style={styles.dateIcon}><IconSymbol name="calendar" size={21} color={Palette.coral} /></View>
         <View style={styles.dateCopy}>
           <Text style={styles.dateValue}>{formatMoment(value.measuredAt)}</Text>
-          <Text style={styles.dateHint}>Можно изменить дату и время этого замера</Text>
+          <Text style={styles.dateHint}>{tr("Можно изменить дату и время этого замера")}</Text>
         </View>
         <IconSymbol name="chevron.right" size={18} color={Palette.subtle} />
       </Pressable>
 
       {metric && active ? (
-        <NumberEntrySheet visible title={active.title} unit={active.unit} initialValue={value.values[metric]} min={active.min} max={active.max} actionLabel={metric === 'pulse' ? 'Готово' : 'Далее'} onSubmit={updateMetric} onCancel={() => setMetric(null)} />
+        <NumberEntrySheet visible title={tr(active.title)} unit={tr(active.unit)} initialValue={value.values[metric]} min={active.min} max={active.max} actionLabel={metric === 'pulse' ? tr('Готово') : tr('Далее')} onSubmit={updateMetric} onCancel={() => setMetric(null)} />
       ) : null}
 
       <Modal visible={dateVisible} transparent animationType="fade" onRequestClose={closeDate}>
         <View style={styles.dateOverlay}>
-          <Pressable accessibilityLabel="Закрыть выбор даты" style={StyleSheet.absoluteFill} onPress={closeDate} />
+          <Pressable accessibilityLabel={tr("Закрыть выбор даты")} style={StyleSheet.absoluteFill} onPress={closeDate} />
           <View style={[styles.dateSheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
             <View style={styles.dateHeader}>
-              <Text style={styles.dateTitle}>Дата и время замера</Text>
-              <Pressable accessibilityRole="button" hitSlop={10} onPress={closeDate}><Text style={styles.link}>Готово</Text></Pressable>
+              <Text style={styles.dateTitle}>{tr("Дата и время замера")}</Text>
+              <Pressable accessibilityRole="button" hitSlop={10} onPress={closeDate}><Text style={styles.link}>{tr("Готово")}</Text></Pressable>
             </View>
             {Platform.OS === 'ios' ? (
-              <DateTimePicker value={value.measuredAt} display="spinner" locale="ru-RU" mode="datetime" themeVariant="light" textColor={Palette.text} onChange={(_, date) => date && updateDate(date)} />
+              <DateTimePicker value={value.measuredAt} display="spinner" locale={getLocale()} mode="datetime" themeVariant="light" textColor={Palette.text} onChange={(_, date) => date && updateDate(date)} />
             ) : (
               <View>
                 <View style={styles.androidButtons}>
-                  <Pressable accessibilityRole="button" onPress={() => setAndroidMode('date')} style={styles.androidButton}><Text style={styles.link}>Изменить дату</Text></Pressable>
-                  <Pressable accessibilityRole="button" onPress={() => setAndroidMode('time')} style={styles.androidButton}><Text style={styles.link}>Изменить время</Text></Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => setAndroidMode('date')} style={styles.androidButton}><Text style={styles.link}>{tr("Изменить дату")}</Text></Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => setAndroidMode('time')} style={styles.androidButton}><Text style={styles.link}>{tr("Изменить время")}</Text></Pressable>
                 </View>
                 <Text style={styles.dateValue}>{formatMoment(value.measuredAt)}</Text>
                 {androidMode ? <DateTimePicker value={value.measuredAt} display="default" mode={androidMode} onChange={(event, date) => { setAndroidMode(null); if (event.type !== 'dismissed' && date) updateDate(date); }} /> : null}
               </View>
             )}
-            <Pressable accessibilityRole="button" onPress={() => updateDate(new Date())}><Text style={styles.link}>Подставить текущее время</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => updateDate(new Date())}><Text style={styles.link}>{tr("Подставить текущее время")}</Text></Pressable>
           </View>
         </View>
       </Modal>
