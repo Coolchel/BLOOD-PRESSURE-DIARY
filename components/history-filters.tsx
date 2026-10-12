@@ -4,7 +4,7 @@ import { tr, getLocale } from '@/localization';
 import { useLanguage } from '@/localization/provider';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -101,13 +101,15 @@ export function HistoryFilters({ visible, value, onApply, onClose }: Props) {
   const [pickerDate, setPickerDate] = useState(new Date());
   const { metric, direction } = splitSort(draft.sort);
 
-  useEffect(() => {
+  const [previousSource, setPreviousSource] = useState({ visible, value });
+  if (previousSource.visible !== visible || previousSource.value !== value) {
+    setPreviousSource({ visible, value });
     if (visible) {
       setDraft(value);
       setPage('main');
       setDateTarget(null);
     }
-  }, [visible, value]);
+  }
 
   function chooseDate(target: 'startDate' | 'endDate') {
     setPickerDate(draft[target] ?? draft.startDate ?? draft.endDate ?? new Date());

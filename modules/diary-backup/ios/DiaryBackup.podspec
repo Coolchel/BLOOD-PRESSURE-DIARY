@@ -6,7 +6,7 @@ Pod::Spec.new do |s|
   s.license = '0BSD'
   s.author = 'Blood Pressure Diary'
   s.homepage = 'https://docs.expo.dev/modules/'
-  s.platforms = { :ios => '15.1' }
+  s.platforms = { :ios => '16.4' }
   s.swift_version = '5.9'
   s.source = { :path => '.' }
   s.static_framework = true

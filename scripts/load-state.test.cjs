@@ -18,7 +18,7 @@ function harness(filename, loaders) {
   const module = {exports:{}};
   const req = name => {
     if(name==='react')return react;
-    if(name==='@react-navigation/native')return {useFocusEffect:callback=>{focus=callback;}};
+    if(name==='expo-router/react-navigation')return {useFocusEffect:callback=>{focus=callback;}};
     if(name==='expo-sqlite')return {useSQLiteContext:()=>({})};
     if(name==='@/data/database')return loaders;
     throw Error('Unexpected module: '+name);

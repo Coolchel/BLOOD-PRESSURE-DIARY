@@ -4,6 +4,10 @@
     "appVersionSource": "local"
   },
   "build": {
+    "android-internal": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    },
     "adhoc": {
       "distribution": "internal",
       "credentialsSource": "local",

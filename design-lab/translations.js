@@ -1,5 +1,14 @@
 (function(root){
   const catalog={
+  "Экспорт JSON": {
+    "en": "Export JSON", "fr": "Exporter en JSON", "es": "Exportar JSON", "de": "JSON exportieren"
+  },
+  "Измерения, замеры и периоды · .json": {
+    "en": "Records, readings and periods · .json", "fr": "Mesures, relevés et périodes · .json", "es": "Registros, lecturas y períodos · .json", "de": "Einträge, Messungen und Zeiträume · .json"
+  },
+  "Поделиться файлом недоступно на этом устройстве.": {
+    "en": "File sharing is unavailable on this device.", "fr": "Le partage de fichiers est indisponible sur cet appareil.", "es": "No se pueden compartir archivos en este dispositivo.", "de": "Dateifreigabe ist auf diesem Gerät nicht verfügbar."
+  },
   "Последние {{0}} дней": {
     "en": "Last {{0}} days",
     "fr": "Les {{0}} derniers jours",
@@ -4951,5 +4960,34 @@
     "de": "Die Datei konnte nicht gespeichert werden."
   }
 };
+  const nativeEntries = {
+    'Средние и разница': ['Means and difference', 'Moyennes et différence', 'Promedios y diferencia', 'Mittelwerte und Differenz'],
+    'Медиана и разница': ['Median and difference', 'Médiane et différence', 'Mediana y diferencia', 'Median und Differenz'],
+    'История первого': ['First history', 'Historique du premier', 'Historial del primero', 'Verlauf des ersten'],
+    'История второго': ['Second history', 'Historique du second', 'Historial del segundo', 'Verlauf des zweiten'],
+    'Не удалось удалить измерение.': ['Could not delete the measurement.', 'Impossible de supprimer la mesure.', 'No se pudo eliminar la medición.', 'Messung konnte nicht gelöscht werden.'],
+    'Удалить черновик?': ['Delete draft?', 'Supprimer le brouillon ?', '¿Eliminar el borrador?', 'Entwurf löschen?'],
+    'Введённые показатели и заметка будут удалены.': ['Entered readings and the note will be deleted.', 'Les mesures saisies et la note seront supprimées.', 'Se eliminarán las mediciones introducidas y la nota.', 'Die eingegebenen Werte und die Notiz werden gelöscht.'],
+    'Удалить замер': ['Delete reading', 'Supprimer la mesure', 'Eliminar medición', 'Messung löschen'],
+    'Нет подходящих записей': ['No matching entries', 'Aucune entrée correspondante', 'No hay registros coincidentes', 'Keine passenden Einträge'],
+    'Показать ещё': ['Show more', 'Afficher plus', 'Mostrar más', 'Mehr anzeigen'],
+    'Начало должно быть не позже завершения.': ['The start must not be after the end.', 'Le début ne doit pas être après la fin.', 'El inicio no debe ser posterior al final.', 'Der Beginn darf nicht nach dem Ende liegen.'],
+    'Показать {{0}}': ['Show {{0}}', 'Afficher {{0}}', 'Mostrar {{0}}', '{{0}} anzeigen'],
+    'Дополнительные фильтры': ['More filters', 'Autres filtres', 'Más filtros', 'Weitere Filter'],
+    'Только с заметкой': ['With a note only', 'Avec une note uniquement', 'Solo con nota', 'Nur mit Notiz'],
+    'Удалить измерение?': ['Delete measurement?', 'Supprimer la mesure ?', '¿Eliminar la medición?', 'Messung löschen?'],
+    'Действие нельзя отменить.': ['This cannot be undone.', 'Cette action est irréversible.', 'Esta acción no se puede deshacer.', 'Diese Aktion kann nicht rückgängig gemacht werden.'],
+    'Добавьте заметку': ['Add a note', 'Ajouter une note', 'Añadir una nota', 'Notiz hinzufügen'],
+    'При обновлении привычек или образа жизни': ['When changing habits or lifestyle', 'Lors d’un changement d’habitudes ou de mode de vie', 'Al cambiar hábitos o estilo de vida', 'Bei Änderungen der Gewohnheiten oder des Lebensstils'],
+    'Измерения останутся в дневнике.': ['Measurements will remain in the diary.', 'Les mesures resteront dans le journal.', 'Las mediciones permanecerán en el diario.', 'Die Messungen bleiben im Tagebuch.'],
+    'Выбрать даты': ['Choose dates', 'Choisir les dates', 'Elegir fechas', 'Daten wählen'],
+    'Выбрать период': ['Choose period', 'Choisir la période', 'Elegir período', 'Zeitraum wählen'],
+    'Разница:': ['Difference:', 'Différence :', 'Diferencia:', 'Differenz:'],
+    'Выбор периода или диапазона': ['Choose a period or date range', 'Choisir une période ou une plage de dates', 'Elegir un período o intervalo de fechas', 'Zeitraum oder Datumsbereich wählen'],
+    'Черновик не сохранён. Попробуйте ещё раз.': ['Draft not saved. Please try again.', 'Brouillon non enregistré. Réessayez.', 'No se guardó el borrador. Inténtalo de nuevo.', 'Entwurf nicht gespeichert. Bitte erneut versuchen.'],
+    'Не удалось сохранить измерение.': ['Could not save the measurement.', 'Impossible d’enregistrer la mesure.', 'No se pudo guardar la medición.', 'Messung konnte nicht gespeichert werden.'],
+    'Не удалось сохранить период.': ['Could not save the period.', 'Impossible d’enregistrer la période.', 'No se pudo guardar el período.', 'Zeitraum konnte nicht gespeichert werden.']
+  };
+  for (const [key, values] of Object.entries(nativeEntries)) catalog[key] = Object.fromEntries(['en','fr','es','de'].map((code,index) => [code,values[index]]));
   if(typeof module==='object'&&module.exports)module.exports=catalog;else root.DiaryTranslations=catalog;
 })(typeof window==='object'?window:globalThis);

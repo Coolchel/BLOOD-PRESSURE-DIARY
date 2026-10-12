@@ -97,9 +97,12 @@ export async function clearBackupFiles(location: BackupLocation): Promise<() => 
     ...Paths.document.list().filter((item): item is File => item instanceof File
       && (item.name === BACKUP_FILENAME || /^davlenie-autobackup-\d{4}-\d{2}-\d{2}\.json$/.test(item.name))),
     ...Paths.cache.list().filter((item): item is File => item instanceof File
-      && (item.name === BACKUP_FILENAME || /^davlenie-export-\d{4}-\d{2}-\d{2}\.xlsx$/.test(item.name))),
+      && (item.name === BACKUP_FILENAME || /^davlenie-export-\d{4}-\d{2}-\d{2}(?:-\d+)?\.(?:xlsx|json)$/.test(item.name))),
   ];
-  const snapshots = await Promise.all(managed.map(async file => ({ file, content: await file.text() })));
+  const snapshots = await Promise.all(managed.map(async file => ({
+    file,
+    content: file.name.endsWith('.xlsx') ? await file.bytes() : await file.text(),
+  })));
   const external = location.kind === 'default' ? null : await readBackupFile(location);
   const deleted: typeof snapshots = [];
   let deletedExternal = false;

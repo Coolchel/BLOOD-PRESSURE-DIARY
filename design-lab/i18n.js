@@ -48,6 +48,20 @@
       periods:{ru:['период','периода','периодов'],en:['period','periods'],fr:['période','périodes'],es:['período','períodos'],de:['Zeitraum','Zeiträume']},
       readings:{ru:['замер','замера','замеров'],en:['reading','readings'],fr:['relevé','relevés'],es:['medición','mediciones'],de:['Messung','Messungen']},
     };
+    function pluralCategory(value){
+      if(typeof Intl!=='undefined'&&typeof Intl.PluralRules==='function')return new Intl.PluralRules(api.locale).select(value);
+      // Some native runtimes format numbers and dates but do not provide
+      // PluralRules. Keep the cardinal forms for the app's five languages local.
+      const number=Math.abs(Number(value));
+      if(code==='ru'){
+        if(!Number.isInteger(number))return 'other';
+        const last=number%10,lastTwo=number%100;
+        if(last===1&&lastTwo!==11)return 'one';
+        if(last>=2&&last<=4&&(lastTwo<12||lastTwo>14))return 'few';
+        return 'other';
+      }
+      return (code==='fr'?number<2:number===1)?'one':'other';
+    }
     const api={
       text,html,
       get language(){return code;},
@@ -56,7 +70,7 @@
       number(value,decimals=0){return Number(value).toLocaleString(api.locale,{maximumFractionDigits:decimals});},
       date(value,options){return new Intl.DateTimeFormat(api.locale,{...options,hourCycle:'h23'}).format(new Date(value));},
       count(value,unit){
-        const category=new Intl.PluralRules(api.locale).select(value),words=nouns[unit][code];
+        const category=pluralCategory(value),words=nouns[unit][code];
         const index=code==='ru'?(category==='one'?0:category==='few'?1:2):category==='one'?0:1;
         return api.number(value)+' '+words[index];
       },

@@ -2,16 +2,15 @@
   "expo": {
     "name": "Давление",
     "slug": "blood-pressure-diary",
-    "version": "0.7.1",
+    "version": "0.8.1",
     "orientation": "portrait",
-    "icon": "./assets/images/coral-app-icon.png",
+    "icon": "./assets/images/clarity-app-icon.png",
     "scheme": "bloodpressure",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.eggplant4287.coral6481",
-      "buildNumber": "4",
+      "buildNumber": "6",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIFileSharingEnabled": true,
@@ -20,26 +19,28 @@
       }
     },
     "android": {
+      "package": "app.eggplant4287.coral6481",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#FFF7F4",
-        "foregroundImage": "./assets/images/coral-splash-mark.png"
+        "backgroundColor": "#F6F3EC",
+        "foregroundImage": "./assets/images/clarity-splash-mark.png",
+        "monochromeImage": "./assets/images/clarity-splash-mark.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": true
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/coral-splash-mark.png"
+      "favicon": "./assets/images/clarity-splash-mark.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/coral-splash-mark.png",
+          "image": "./assets/images/clarity-splash-mark.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#F5F6F9"
+          "backgroundColor": "#F6F3EC"
         }
       ],
       ["expo-localization", { "supportedLocales": ["ru", "en", "fr", "es", "de"] }]

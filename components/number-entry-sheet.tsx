@@ -3,7 +3,7 @@
 import { tr } from '@/localization';
 import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   Modal,
@@ -44,18 +44,20 @@ export function NumberEntrySheet({
   onSubmit,
 }: NumberEntrySheetProps) {
   useLanguage();
-  const [value, setValue] = useState('');
-  const [replaceOnNextKey, setReplaceOnNextKey] = useState(false);
-  const translateY = useRef(new Animated.Value(520)).current;
+  const [value, setValue] = useState(() => visible && initialValue ? String(initialValue) : '');
+  const [replaceOnNextKey, setReplaceOnNextKey] = useState(() => visible && initialValue !== undefined);
+  const [translateY] = useState(() => new Animated.Value(520));
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  useEffect(() => {
+  const [previousSource, setPreviousSource] = useState({ initialValue, title, visible });
+  if (previousSource.initialValue !== initialValue || previousSource.title !== title || previousSource.visible !== visible) {
+    setPreviousSource({ initialValue, title, visible });
     if (visible) {
       setValue(initialValue ? String(initialValue) : '');
       setReplaceOnNextKey(initialValue !== undefined);
     }
-  }, [initialValue, title, visible]);
+  }
 
   useEffect(() => {
     if (visible) {
@@ -175,7 +177,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(24, 32, 47, 0.26)',
   },
   sheet: {

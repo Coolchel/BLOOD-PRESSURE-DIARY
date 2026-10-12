@@ -4,6 +4,7 @@ const { saveExcel, resetStoredDiary } = require('../file-actions.js');
 const M = require('../model.js');
 const now = Date.parse('2026-10-02T10:00:00.000Z');
 const seed = () => M.seed(now);
+const withCreatedAt = phases => phases.map(p => ({...p, createdAt:p.createdAt || p.startedAt}));
 const reading = (systolic=120, measuredAt='2026-10-02T08:00:00.000Z') => ({systolic,diastolic:80,pulse:70,measuredAt});
 const session = (readings=[reading()],id=1) => ({id,mode:readings.length===1?'single':'series',measuredAt:readings[0]?.measuredAt||reading().measuredAt,readings,wellbeing:7,tags:['Спокойно'],note:''});
 
@@ -205,7 +206,7 @@ test('comparison medians weight every record once and compare the displayed valu
 });
 test('demo has valid records, readings and non-overlapping periods', () => {
   const state=seed();assert.equal(state.sessions.length,90);
-  assert.deepEqual(M.restore(M.backup(state)), {sessions:state.sessions.map(s=>({...s,createdAt:s.measuredAt})),phases:state.phases});
+  assert.deepEqual(M.restore(M.backup(state)), {sessions:state.sessions.map(s=>({...s,createdAt:s.measuredAt})),phases:withCreatedAt(state.phases)});
 });
 test('single and series enforce bounds and keep each reading time', () => {
   M.validateSession(session());M.validateSession(session([reading(120),reading(123,'2026-10-02T08:02:00.000Z')]));
@@ -362,7 +363,7 @@ test('restore rejects excessive overlap but older local diaries can load and red
   const phases=Array.from({length:4},(_,i)=>({...input,id:i+1,title:'Период '+i}));
   const state={...seed(),phases},before=M.clone(state),payload=M.backup(state),payloadBefore=M.clone(payload);
   assert.throws(()=>M.restore(payload),e=>e.code==='PHASE_LIMIT');
-  assert.deepEqual(M.restore(payload,[],{enforcePhaseLimit:false}).phases,phases);
+  assert.deepEqual(M.restore(payload,[],{enforcePhaseLimit:false}).phases,withCreatedAt(phases));
   const repaired=M.finishPhase(phases,1,Date.parse('2026-10-02T09:00:00Z'));
   assert.equal(repaired.find(p=>p.id===1).endedAt,'2026-10-02T09:00:00.000Z');
   assert.equal(repaired.filter(p=>p.endedAt===null).length,3);
@@ -390,7 +391,7 @@ test('single-point and equal-timestamp charts remain valid', () => {
 });
 test('JSON round trip preserves notes, tags, periods and individual reading times', () => {
   const state=seed(),restored=M.restore(M.backup(state));
-  assert.deepEqual(restored.sessions.map(({createdAt,...s})=>s),state.sessions);assert.deepEqual(restored.phases,state.phases);
+  assert.deepEqual(restored.sessions.map(({createdAt,...s})=>s),state.sessions);assert.deepEqual(restored.phases,withCreatedAt(state.phases));
 });
 test('legacy JSON keeps current phases and defaults missing individual reading times', () => {
   const state=seed(),payload=M.backup(state);delete payload.phases;payload.readings.forEach(r=>delete r.measured_at);
@@ -414,9 +415,9 @@ test('version 2 backup preserves overlapping periods and appearance while versio
   const state=seed(),before=M.clone(state.sessions);
   state.phases=M.savePhase(state.phases,{kind:'custom',title:'Кофе',icon:'coffee',color:'#123abc',note:'Параллельно',startedAt:state.phases[0].startedAt,endedAt:null});
   const payload=M.backup(state);assert.equal(payload.version,2);
-  assert.deepEqual(M.restore(payload).phases,state.phases);assert.deepEqual(state.sessions,before);
+  assert.deepEqual(M.restore(payload).phases,withCreatedAt(state.phases));assert.deepEqual(state.sessions,before);
   const legacy=M.backup(seed());legacy.version=1;
-  assert.deepEqual(M.restore(legacy).phases,seed().phases);
+  assert.deepEqual(M.restore(legacy).phases,withCreatedAt(seed().phases));
   assert.throws(()=>M.restore({...payload,version:99}));
 });
 test('one launch backup uses a rolling 24-hour interval and never updates twice within it', () => {

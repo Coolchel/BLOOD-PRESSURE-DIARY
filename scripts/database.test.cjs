@@ -11,6 +11,9 @@ const modules = new Map();
 const files = new Map();
 let failFileWrite = false;
 let failFileDelete = false;
+const sharedFiles = [];
+let sharingAvailable = true;
+let shareFailure = null;
 const documentDirectory = { uri:'file:///documents/', list: () => [...files.keys()].filter(name=>!name.includes('::')).map((name) => new FakeFile(documentDirectory, name)) };
 class FakeFile {
   constructor(directory, name) {
@@ -20,6 +23,7 @@ class FakeFile {
   }
   get exists() { return files.has(this.key); }
   async text() { if(!this.exists)throw Error('missing file');return files.get(this.key); }
+  async bytes() { if(!this.exists)throw Error('missing file');return new Uint8Array(Buffer.from(files.get(this.key))); }
   write(value) {
     if (failFileWrite) throw new Error('simulated file write failure');
     files.set(this.key, value);
@@ -44,7 +48,9 @@ function loadTS(relativePath) {
     if (name === '@/localization/provider') return { useLanguage: () => ({ language: 'ru' }) };
     if (name === '@/localization') return loadTS('localization/index.ts');
     if (name.startsWith('../design-lab/')) return require(path.resolve(path.dirname(filename), name));
+    if (name.startsWith('./') && fs.existsSync(path.resolve(path.dirname(filename),name)+'.ts')) return loadTS(path.resolve(path.dirname(filename),name)+'.ts');
     if (name === 'expo-file-system') return { File: FakeFile, Directory:FakeDirectory, Paths: { document: documentDirectory, cache:cacheDirectory } };
+    if (name === 'expo-sharing') return { isAvailableAsync: async () => sharingAvailable, shareAsync: async (uri, options) => { sharedFiles.push({uri, options}); if (shareFailure) throw shareFailure; } };
     if (name === 'expo-modules-core') return {requireOptionalNativeModule:()=>null};
     if (name === 'react-native') return { Platform:{OS:'android'}, Text: 'Text', View: 'View', StyleSheet: { create: (styles) => styles } };
     if (name === 'react-native-svg') return Object.fromEntries([
@@ -69,6 +75,53 @@ const { setAutoBackupEnabled, runAutoBackup, getLastAutoBackupAt, getBackupLocat
   readStoredBackup, changeBackupLocation, factoryResetDiary, BackupDestinationExistsError, BACKUP_INTERVAL_MS } = loadTS('data/auto-backup.ts');
 const { backupFacts } = loadTS('data/backup-info.ts');
 const { hasBackupFile } = loadTS('data/backup-storage.ts');
+const clarity = loadTS('data/clarity-state.ts');
+const M = require('../design-lab/model.js');
+const { comparisonSelections } = loadTS('constants/clarity-comparison.ts');
+const { clarityWorkbook } = loadTS('data/clarity-export.ts');
+const { shareDiary } = loadTS('data/diary-share.ts');
+
+test('JSON sharing exports current SQLite data, restores exactly and does not overwrite the daily backup', async t => {
+  files.clear();sharedFiles.length=0;t.after(()=>{files.clear();sharedFiles.length=0;});
+  const db=await fixture(t);
+  await api.createPhase(db,{...phase(),title:'Personal title',icon:'moon',color:'#627eaa',note:'Original note'});
+  await api.addMeasurement(db,{...draft(10,[reading(121),{...reading(125),measuredAt:iso(11)}]),note:' exact\n',tags:['Кофе']});
+  files.set('davlenie-autobackup.json','Unchanged daily backup');
+  const before=await snapshot(db),state=await clarity.readClarityState(db);
+  await shareDiary(state,'json');
+  assert.equal(sharedFiles.length,1);assert.equal(sharedFiles[0].options.mimeType,'application/json');assert.equal(sharedFiles[0].options.UTI,'public.json');
+  const saved=[...files.entries()].find(([name])=>name.includes('davlenie-export-')&&name.endsWith('.json'));
+  const payload=JSON.parse(saved[1]);assert.equal(payload.version,2);
+  assert.equal(payload.sessions[0].note,' exact\n');assert.equal(payload.phases[0].color,'#627eaa');
+  assert.deepEqual(payload.readings.map(r=>r.measured_at),state.sessions[0].readings.map(r=>r.measuredAt));
+  const restored=await fixture(t);await api.restoreBackup(restored,payload);
+  assert.deepEqual(await snapshot(restored),before);
+  assert.deepEqual(await snapshot(db),before);assert.equal(files.get('davlenie-autobackup.json'),'Unchanged daily backup');
+  assert.ok(files.has(saved[0]),'recipient must be able to read the shared file after the chooser closes');
+});
+
+test('Excel sharing creates a readable XLSX with all three sheets and the correct native share metadata', async t => {
+  files.clear();sharedFiles.length=0;t.after(()=>{files.clear();sharedFiles.length=0;});
+  const db=await fixture(t);await api.addMeasurement(db,draft());
+  await shareDiary(await clarity.readClarityState(db),'xlsx');
+  const binary=[...files.entries()].find(([name])=>name.endsWith('.xlsx'))[1];
+  const workbook=require('@e965/xlsx').read(binary,{type:'array'});
+  assert.equal(workbook.SheetNames.length,3);assert.equal(sharedFiles.length,1);
+  assert.equal(sharedFiles[0].options.mimeType,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  assert.equal(sharedFiles[0].options.UTI,'org.openxmlformats.spreadsheetml.sheet');
+});
+
+test('share failures preserve diary and backup; cache cleanup removes only old app exports', async t => {
+  files.clear();sharedFiles.length=0;t.after(()=>{files.clear();sharedFiles.length=0;sharingAvailable=true;shareFailure=null;});
+  const db=await fixture(t);await api.addMeasurement(db,draft());const state=await clarity.readClarityState(db),before=await snapshot(db);
+  files.set('davlenie-autobackup.json','daily');files.set(cacheDirectory.uri+'::user.json','personal');
+  files.set(cacheDirectory.uri+'::davlenie-export-2020-01-01-1577836800000.json','old');
+  sharingAvailable=false;await assert.rejects(shareDiary(state,'json'),/недоступно/);assert.equal(sharedFiles.length,0);
+  sharingAvailable=true;shareFailure=Error('chooser failed');await assert.rejects(shareDiary(state,'json'),/chooser failed/);
+  assert.ok(!files.has(cacheDirectory.uri+'::davlenie-export-2020-01-01-1577836800000.json'));
+  assert.equal(files.get('davlenie-autobackup.json'),'daily');assert.equal(files.get(cacheDirectory.uri+'::user.json'),'personal');
+  assert.deepEqual(await snapshot(db),before);
+});
 
 test('opening a native backup folder checks file presence without parsing its possibly corrupt JSON', async t => {
   files.clear(); t.after(() => files.clear());
@@ -176,6 +229,7 @@ test('factory reset removes records, phases, drafts and all managed copies witho
   await changeBackupLocation(db,location);
   files.set('davlenie-autobackup-2026-09-01.json','old bytes');files.set('unrelated.json','keep');
   files.set(cacheDirectory.uri+'::davlenie-export-2026-09-01.xlsx','private export');
+  files.set(cacheDirectory.uri+'::davlenie-export-2026-10-12-1791838800000.json','private JSON export');
   files.set(cacheDirectory.uri+'::'+ 'davlenie-autobackup.json','cached copy');
   await factoryResetDiary(db);
   assert.equal(await api.countMeasurements(db),0);assert.deepEqual(await api.getPhases(db),[]);
@@ -190,6 +244,9 @@ test('factory reset removes records, phases, drafts and all managed copies witho
 test('factory reset rolls back database and copy bytes when its database transaction fails',async t=>{
   files.clear();t.after(()=>files.clear());const db=await fixture(t);
   await api.addMeasurement(db,draft());await runAutoBackup(db,Date.parse(iso(10)));
+  const binary=new Uint8Array([80,75,3,4,0,255,128,200]);
+  files.set(cacheDirectory.uri+'::davlenie-export-2026-09-01.xlsx',binary);
+  files.set(cacheDirectory.uri+'::davlenie-export-2026-10-12-1791838800000.json','{"private":"exact bytes"}');
   const before=await snapshot(db),savedFiles=[...files];
   const broken={...db,runAsync:async(sql,...args)=>{if(sql==='DELETE FROM app_settings')throw Error('database busy');return db.runAsync(sql,...args);}};
   await assert.rejects(factoryResetDiary(broken),/database busy/);
@@ -239,26 +296,29 @@ test('history can reveal all 450 records, including equal timestamps, with the f
   assert.equal(sorted.length, 200);
 });
 
-test('new periods close an open predecessor and boundary measurements belong to one period', async (t) => {
+test('independent periods stay open and one measurement belongs to every matching period', async (t) => {
   const db = await fixture(t);
   await api.createPhase(db, phase(1));
   await api.createPhase(db, phase(10, null, 'coffee'));
   await api.addMeasurement(db, draft(9));
   await api.addMeasurement(db, draft(10));
   const phases = await api.getPhasesWithStats(db);
-  assert.equal(phases.find((item) => item.kind === 'clean').endedAt, iso(10));
-  assert.deepEqual(phases.map((item) => item.stats.count), [1, 1]);
+  assert.equal(phases.find((item) => item.kind === 'clean').endedAt, null);
+  assert.deepEqual(phases.map((item) => item.stats.count), [1, 2]);
   assert.equal(findPhaseFor(iso(10), phases).kind, 'coffee');
+  await api.createPhase(db, phase(10));
   const before = await snapshot(db);
   await assert.rejects(api.createPhase(db, phase(10)), api.PhaseOverlapError);
-  await assert.rejects(api.createPhase(db, phase(5, 8)), api.PhaseOverlapError);
   assert.deepEqual(await snapshot(db), before);
+  await api.createPhase(db, phase(5, 8)); // A fourth total period is allowed outside the triple intersection.
 });
 
-test('closed-period overlaps and conflicting edits are rejected without modifying existing dates', async (t) => {
+test('four overlapping closed periods and conflicting edits are rejected without modifying dates', async (t) => {
   const db = await fixture(t);
   await api.createPhase(db, phase(1, 10));
   await api.createPhase(db, phase(10, 20, 'coffee'));
+  await api.createPhase(db, phase(1, 20, 'energy'));
+  await api.createPhase(db, phase(1, 20, 'mixed'));
   const before = await snapshot(db);
   await assert.rejects(api.createPhase(db, phase(5, 12)), api.PhaseOverlapError);
   const coffee = (await api.getPhases(db)).find((item) => item.kind === 'coffee');
@@ -276,6 +336,7 @@ test('a failed creation does not close an open predecessor', async (t) => {
   await db.runAsync(`INSERT INTO experiment_phases
     (kind, title, started_at, ended_at, note, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
   'coffee', 'legacy', iso(15), iso(25), '', iso(1));
+  await api.createPhase(db, phase(15, 25, 'energy'));
   await assert.rejects(api.createPhase(db, phase(10, 20)), api.PhaseOverlapError);
   assert.equal((await api.getPhases(db)).find((item) => item.kind === 'clean').endedAt, null);
 });
@@ -333,9 +394,9 @@ test('invalid backups are rejected before replacement and current records surviv
     'fractional pressure': (b) => { b.readings[0].systolic = 120.5; },
     'single with two readings': (b) => b.readings.push({ ...b.readings[0], position: 1 }),
     'series with one reading': (b) => { b.sessions[0].mode = 'series'; },
-    'series with four readings': (b) => {
+    'series with eleven readings': (b) => {
       b.sessions[0].mode = 'series';
-      for (let position = 1; position < 4; position += 1) b.readings.push({ ...b.readings[0], position });
+      for (let position = 1; position < 11; position += 1) b.readings.push({ ...b.readings[0], position });
     },
     'duplicate reading positions': (b) => {
       b.sessions[0].mode = 'series'; b.readings.push({ ...b.readings[0] });
@@ -343,7 +404,9 @@ test('invalid backups are rejected before replacement and current records surviv
     'gap in reading positions': (b) => { b.readings[0].position = 1; },
     'duplicate phase IDs': (b) => b.phases.push({ ...b.phases[0] }),
     'inverted phase range': (b) => { b.phases[0].ended_at = iso(1); },
-    'overlapping phases': (b) => b.phases.push({ ...b.phases[0], id: 2, started_at: iso(10), ended_at: null }),
+    'four overlapping phases': (b) => { for (let id = 2; id <= 4; id++) b.phases.push({ ...b.phases[0], id, started_at: iso(10), ended_at: null }); },
+    'unknown icon': (b) => { b.phases[0].icon = 'not-an-icon'; },
+    'nonstring color': (b) => { b.phases[0].color = 42; },
     'null phase': (b) => { b.phases[0] = null; },
   };
   for (const [name, mutate] of Object.entries(mutations)) {
@@ -377,7 +440,7 @@ test('valid backups round-trip, normalize timezones, and older backups preserve 
 test('invalid series cannot be written through the data API', async (t) => {
   const db = await fixture(t);
   await assert.rejects(api.addMeasurement(db, { ...draft(), mode: 'series' }));
-  await assert.rejects(api.addMeasurement(db, draft(10, Array.from({ length: 4 }, () => reading()))));
+  await assert.rejects(api.addMeasurement(db, draft(10, Array.from({ length: 11 }, () => reading()))));
   assert.equal(await api.countMeasurements(db), 0);
   await api.addMeasurement(db, draft(10, [reading(), reading()]));
   await api.addMeasurement(db, draft(10, [reading(), reading(), reading()]));
@@ -695,6 +758,52 @@ test('upgrading an old readings table preserves measurements and backfills times
   assert.deepEqual((await api.getMeasurementById(db, 1)).readings.map((item) => item.measuredAt), [iso(10), iso(11)]);
 });
 
+test('the installed iOS 0.7.1 database upgrades in place without losing records, periods or settings', async t => {
+  const db = await fixture(t);
+  // The schema shipped in EAS build b4b41626 (commit 71047d3) lacks these columns and marker.
+  await db.execAsync(`
+    ALTER TABLE measurement_readings DROP COLUMN measured_at;
+    ALTER TABLE experiment_phases DROP COLUMN icon;
+    ALTER TABLE experiment_phases DROP COLUMN color;
+    DELETE FROM app_settings;
+  `);
+  await db.runAsync(`INSERT INTO measurement_sessions
+    (id, measured_at, wellbeing, tags_json, note, mode, is_demo, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 0, ?)`, 42, iso(10), 8, '["coffee"]', 'Моя прежняя заметка', 'series', iso(9));
+  for (const [position, systolic] of [120, 122].entries()) {
+    await db.runAsync(`INSERT INTO measurement_readings
+      (id, session_id, systolic, diastolic, pulse, position) VALUES (?, 42, ?, 80, 70, ?)`,
+    100 + position, systolic, position);
+  }
+  await db.runAsync(`INSERT INTO experiment_phases
+    (id, kind, title, started_at, ended_at, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  17, 'clean', 'Мой прежний период', iso(1), iso(11), 'Заметка периода', iso(1));
+  await db.runAsync('INSERT INTO app_settings (key, value) VALUES (?, ?)', 'auto_backup_enabled', 'no');
+  const legacyRows = async () => ({
+    sessions: await db.getAllAsync('SELECT * FROM measurement_sessions ORDER BY id'),
+    readings: await db.getAllAsync('SELECT id, session_id, systolic, diastolic, pulse, position FROM measurement_readings ORDER BY id'),
+    phases: await db.getAllAsync('SELECT id, kind, title, started_at, ended_at, note, created_at FROM experiment_phases ORDER BY id'),
+  });
+  const before = await legacyRows();
+  await api.initializeDatabase(db);
+  assert.deepEqual(await legacyRows(), before);
+  assert.equal(await api.getSetting(db, 'auto_backup_enabled'), 'no');
+  const record = await api.getMeasurementById(db, 42);
+  assert.equal(record.note, 'Моя прежняя заметка');
+  assert.deepEqual(record.tags, ['coffee']);
+  assert.equal(record.readingCount, 2);
+  assert.equal(record.systolic, 121);
+  assert.deepEqual(record.readings.map(r => [r.systolic, r.measuredAt]), [[120, iso(10)], [122, iso(10)]]);
+  const state = await clarity.readClarityState(db);
+  assert.deepEqual(state.sessions.map(s => s.id), [42]);
+  assert.deepEqual(state.phases.map(p => [p.id, p.title, p.note]), [[17, 'Мой прежний период', 'Заметка периода']]);
+  const migrated = await snapshot(db);
+  await api.initializeDatabase(db);
+  assert.deepEqual(await snapshot(db), migrated);
+  await api.addMeasurement(db, draft(12));
+  assert.deepEqual((await api.getMeasurements(db)).map(r => r.id), [43, 42]);
+});
+
 test('each series reading keeps its own time in details, JSON and restoration', async (t) => {
   const db = await fixture(t);
   const entries = [
@@ -832,10 +941,10 @@ test('legacy version 1 design lab JSON restores into the mobile database and rou
   assert.equal(await api.countMeasurements(db), state.sessions.length);
   const restored = model.restore(await api.buildBackupPayload(db));
   assert.deepEqual(restored.sessions.map(({ createdAt, ...item }) => item).sort((a, b) => a.id - b.id), state.sessions);
-  assert.deepEqual(restored.phases.sort((a, b) => a.id - b.id), state.phases);
+  assert.deepEqual(restored.phases.sort((a, b) => a.id - b.id), state.phases.map(p=>({...p,createdAt:p.createdAt || p.startedAt})));
 });
 
-test('version 2 web backup is rejected by the legacy mobile importer without replacing current data', async (t) => {
+test('version 2 web backup restores parallel periods and appearance into SQLite and back', async (t) => {
   const model = require('../design-lab/model.js');
   const state = model.seed(Date.parse('2026-10-02T12:00:00.000Z'));
   state.phases = model.savePhase(state.phases, {
@@ -845,7 +954,114 @@ test('version 2 web backup is rejected by the legacy mobile importer without rep
   const db = await fixture(t);
   await api.addMeasurement(db, draft());
   await api.createPhase(db, phase(1, 20));
-  const before = await snapshot(db);
-  await assert.rejects(api.restoreBackup(db, model.backup(state)), /unsupported backup/);
-  assert.deepEqual(await snapshot(db), before);
+  await api.restoreBackup(db, model.backup(state));
+  const restored = model.restore(await api.buildBackupPayload(db));
+  assert.deepEqual(restored.sessions.map(({ createdAt, ...s }) => s).sort((a,b) => a.id-b.id), state.sessions);
+  assert.deepEqual(restored.phases.sort((a,b) => a.id-b.id), state.phases.map(p=>({...p,createdAt:p.createdAt || p.startedAt})).sort((a,b) => a.id-b.id));
+});
+
+test('all series lengths 2 through 10 and their first-reading period membership match the prototype', async t => {
+  const db = await fixture(t);
+  await api.createPhase(db, phase(1, 11));
+  await api.createPhase(db, { ...phase(10, 20), kind: 'custom', icon: 'moon', color: M.PHASE_COLORS[4], title: 'Sleep' });
+  for (let count = 2; count <= 10; count++) await api.addMeasurement(db, draft(10, Array.from({length:count}, (_,i)=>({...reading(120+i),measuredAt:iso(10+i)}))));
+  const state = await clarity.readClarityState(db);
+  assert.deepEqual(state.sessions.map(s=>s.readings.length).sort((a,b)=>a-b),[2,3,4,5,6,7,8,9,10]);
+  for (const session of state.sessions) assert.equal(M.phasesFor(session,state.phases).length,2);
+  for (const method of ['mean','median']) {
+    const web = M.restore(M.backup(state));
+    assert.deepEqual(M.statisticsSummary(web.sessions,method),M.statisticsSummary(state.sessions,method));
+    assert.deepEqual(M.statisticsExtremes(web.sessions),M.statisticsExtremes(state.sessions));
+  }
+});
+
+test('a fourth future intersection is rejected but exclusive touching boundaries are allowed', async t => {
+  const db=await fixture(t);
+  const future={...phase(),startedAt:'2030-01-01T12:00:00.000Z',endedAt:'2030-02-01T12:00:00.000Z'};
+  for (let i=0;i<3;i++) await api.createPhase(db,{...future,title:String(i)});
+  const before=await snapshot(db);
+  await assert.rejects(api.createPhase(db,{...future,title:'Fourth'}),api.PhaseOverlapError);
+  assert.deepEqual(await snapshot(db),before);
+  await api.createPhase(db,{...future,startedAt:future.endedAt,endedAt:null});
+  assert.equal((await api.getPhases(db)).length,4);
+});
+
+test('independent drafts survive reload and saving clears only the saved mode atomically', async t => {
+  const db=await fixture(t);
+  let state=await clarity.readClarityState(db);
+  const single=M.newDraft('single',Date.parse(iso(10))), series=M.newDraft('series',Date.parse(iso(10)));
+  single.readings[0]=M.readingWithInput(single.readings[0],'systolic','124'); single.note='  Keep whitespace\n';
+  series.readings[0]=M.readingWithInput(series.readings[0],'pulse','72');
+  state=M.storeDraft(M.storeDraft(state,single),series);
+  await clarity.writeClarityDrafts(db,state);
+  assert.deepEqual((await clarity.readClarityState(db)).drafts,state.drafts);
+  const cleared=M.clearDraft(state,'single');
+  await api.addMeasurement(db,{...draft(),note:'  exact\n'},cleared);
+  const reopened=await clarity.readClarityState(db);
+  assert.equal(reopened.drafts.single,null); assert.deepEqual(reopened.drafts.series,series);
+  assert.equal(reopened.sessions[0].note,'  exact\n');
+  const previous=await snapshot(db), draftsBefore=await api.getSetting(db,clarity.DRAFTS_KEY);
+  const fail={...db,runAsync:async(sql,...args)=>{if(sql.includes('INSERT INTO app_settings'))throw Error('draft disk failure');return db.runAsync(sql,...args);}};
+  await assert.rejects(api.addMeasurement(fail,draft(12),M.clearDraft(reopened,'series')),/disk failure/);
+  assert.deepEqual(await snapshot(db),previous);assert.equal(await api.getSetting(db,clarity.DRAFTS_KEY),draftsBefore);
+});
+
+test('invalid draft bytes are preserved and blocked, invalid statistics recover field by field', async t => {
+  const db=await fixture(t);
+  await api.setSetting(db,clarity.DRAFTS_KEY,'{"draftMode":"series","drafts":{"single":null,"series":{"mode":"series","readings":[null]}}}');
+  const raw=await api.getSetting(db,clarity.DRAFTS_KEY);
+  await assert.rejects(clarity.readClarityState(db)); assert.equal(await api.getSetting(db,clarity.DRAFTS_KEY),raw);
+  await api.setSetting(db,clarity.STATISTICS_KEY,'broken');
+  assert.deepEqual(await clarity.readClarityPreferences(db,[]),M.statisticsPreferences(null));
+  const pref=M.statisticsPreferences({selection:{scope:'time',preset:'all'},chartMetric:'combined',summary:'median',compareSummary:'median',compareType:'dates'});
+  await clarity.writeClarityPreferences(db,pref); await api.initializeDatabase(db);
+  assert.deepEqual(await clarity.readClarityPreferences(db,[]),pref);
+});
+
+test('comparison defaults use different populated periods or consecutive seven-day intervals',()=>{
+  const state=M.seed(Date.parse('2026-10-11T12:00:00.000Z'));
+  const [a,b]=comparisonSelections(state,M.statisticsPreferences(null),Date.parse('2026-10-11T12:00:00Z'));
+  assert.notEqual(a.scope,b.scope);
+  const [left,right]=comparisonSelections(state,M.statisticsPreferences({compareType:'dates'}),Date.parse('2026-10-11T12:00:00Z'));
+  assert.deepEqual(left,{scope:'time',preset:'custom',from:'2026-09-28',to:'2026-10-04'});
+  assert.deepEqual(right,{scope:'time',preset:'custom',from:'2026-10-05',to:'2026-10-11'});
+});
+
+test('native XLSX retains raw averages, all intersecting periods and every original reading', async t => {
+  const db=await fixture(t);await api.createPhase(db,phase(1));await api.createPhase(db,{...phase(1),title:'Second',kind:'custom',icon:'moon',color:M.PHASE_COLORS[4]});
+  await api.addMeasurement(db,{...draft(10,[reading(120),reading(121)]),note:'=literal user note'});
+  const state=await clarity.readClarityState(db), book=clarityWorkbook(state), XLSX=require('@e965/xlsx');
+  const bytes=XLSX.write(book,{type:'buffer',bookType:'xlsx'}), reread=XLSX.read(bytes,{type:'buffer',cellDates:true});
+  assert.equal(reread.Sheets['Измерения'].B2.v,120.5);
+  assert.equal(reread.Sheets['Измерения'].I2.t,'s');assert.equal(reread.Sheets['Измерения'].I2.v,'=literal user note');
+  assert.ok(reread.Sheets['Измерения'].J2.v.includes('Second'));assert.ok(reread.Sheets['Измерения'].J2.v.includes('clean'));
+  assert.equal(XLSX.utils.sheet_to_json(reread.Sheets['Замеры']).length,2);
+  const periods=XLSX.utils.sheet_to_json(reread.Sheets['Периоды'],{header:1});
+  assert.equal(periods.find(row=>row[0]==='Second')[2],M.PHASE_COLORS[4]);
+});
+
+test('saving an entry uses the current SQLite draft of the other mode rather than a stale screen snapshot', async t => {
+  const db = await fixture(t), old = await clarity.readClarityState(db);
+  const single = M.newDraft('single', Date.parse(iso(10))), series = M.newDraft('series', Date.parse(iso(10)));
+  single.readings[0] = M.readingWithInput(single.readings[0], 'systolic', '124');
+  await clarity.writeClarityDrafts(db, M.storeDraft(old, single));
+  series.note = 'Written while the single form was still mounted';
+  await clarity.writeClarityDrafts(db, M.storeDraft(M.storeDraft(old, single), series));
+  await api.addMeasurement(db, draft(), 'single');
+  const next = await clarity.readClarityState(db);
+  assert.equal(next.drafts.single, null);
+  assert.deepEqual(next.drafts.series, series);
+  assert.equal(next.draftMode, 'series');
+});
+
+test('concurrent initialization and independent writes share the SQLite queue and recover after rejection', async t => {
+  const db = await fixture(t);
+  await Promise.all([api.initializeDatabase(db), api.addMeasurement(db, draft(10)), api.initializeDatabase(db), api.addMeasurement(db, draft(11)), api.createPhase(db, phase(1))]);
+  assert.equal(await api.countMeasurements(db), 2);
+  assert.equal((await api.getPhases(db)).length, 1);
+  const { withDiaryTransaction } = loadTS('data/write-queue.ts');
+  const failed = withDiaryTransaction(db, async () => { await db.runAsync('DELETE FROM measurement_sessions'); throw Error('rollback'); });
+  const succeeded = api.addMeasurement(db, draft(12));
+  await assert.rejects(failed, /rollback/); await succeeded;
+  assert.equal(await api.countMeasurements(db), 3);
 });

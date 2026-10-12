@@ -3,10 +3,10 @@
 import { tr } from '@/localization';
 import { useLanguage } from '@/localization/provider';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, Modal, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, Easing, Modal, StyleSheet, Text, View } from 'react-native';
 
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Icon } from '@/components/clarity/ui';
 import { Palette } from '@/constants/design';
 
 type SaveSuccessOverlayProps = {
@@ -25,12 +25,18 @@ export function SaveSuccessOverlay({
   onDone,
 }: SaveSuccessOverlayProps) {
   useLanguage();
-  const backdrop = useRef(new Animated.Value(0)).current;
-  const circle = useRef(new Animated.Value(0)).current;
-  const mark = useRef(new Animated.Value(0)).current;
-  const ring = useRef(new Animated.Value(0)).current;
-  const caption = useRef(new Animated.Value(0)).current;
+  const [backdrop] = useState(() => new Animated.Value(0));
+  const [circle] = useState(() => new Animated.Value(0));
+  const [mark] = useState(() => new Animated.Value(0));
+  const [ring] = useState(() => new Animated.Value(0));
+  const [caption] = useState(() => new Animated.Value(0));
   const finish = useRef(onDone);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
 
   // Колбэк держим в ref: пересоздание функции родителем не должно перезапускать анимацию.
   useEffect(() => {
@@ -46,9 +52,21 @@ export function SaveSuccessOverlay({
     ring.setValue(0);
     caption.setValue(0);
 
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    let completed = false;
+    const completeFeedback = () => {
+      if (completed) return;
+      completed = true;
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    };
+    const done = () => { completeFeedback(); finish.current(); };
+    if (reduceMotion) {
+      backdrop.setValue(1); circle.setValue(1); mark.setValue(1); caption.setValue(1); ring.setValue(0);
+      const timer = setTimeout(done, VISIBLE_MS);
+      return () => clearTimeout(timer);
+    }
 
-    Animated.sequence([
+    const animation = Animated.sequence([
       Animated.parallel([
         Animated.timing(backdrop, {
           toValue: 1,
@@ -83,19 +101,16 @@ export function SaveSuccessOverlay({
           useNativeDriver: true,
         }),
       ]),
-    ]).start();
-
-    // Вторая, более мягкая отдача в момент расхождения кольца — «печать поставлена».
-    const echo = setTimeout(() => {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, 260);
-    const timer = setTimeout(() => finish.current(), VISIBLE_MS);
+    ]);
+    animation.start(({ finished }) => { if (finished) completeFeedback(); });
+    const timer = setTimeout(done, VISIBLE_MS);
 
     return () => {
-      clearTimeout(echo);
+      completed = true;
+      animation.stop();
       clearTimeout(timer);
     };
-  }, [backdrop, caption, circle, mark, ring, visible]);
+  }, [backdrop, caption, circle, mark, ring, visible, reduceMotion]);
 
   return (
     <Modal animationType="none" statusBarTranslucent transparent visible={visible}>
@@ -123,7 +138,7 @@ export function SaveSuccessOverlay({
               },
             ]}>
             <Animated.View style={{ transform: [{ scale: mark }] }}>
-              <IconSymbol name="checkmark" size={48} color={Palette.white} weight="bold" />
+              <Icon name="check" size={48} color={Palette.white} />
             </Animated.View>
           </Animated.View>
 
@@ -184,12 +199,14 @@ const styles = StyleSheet.create({
     marginTop: 26,
   },
   title: {
+    fontFamily: 'Manrope',
     color: Palette.white,
     fontSize: 22,
     fontWeight: '700',
     letterSpacing: -0.4,
   },
   subtitle: {
+    fontFamily: 'Manrope',
     color: 'rgba(255,255,255,0.82)',
     fontSize: 13,
     marginTop: 5,

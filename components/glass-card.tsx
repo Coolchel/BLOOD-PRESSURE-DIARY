@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   tint: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(255, 255, 255, 0.16)',
   },
 });

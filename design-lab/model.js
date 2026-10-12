@@ -22,7 +22,7 @@
     ['drop','Вода'],['cup','Чай'],['flower','Цветок'],['mountain','Горы'],['book','Книга'],['briefcase','Работа'],
     ['home','Дом'],['plane','Поездка'],['shield','Щит'],['clock','Часы'],['calendar','Календарь'],['star','Звезда'],
   ].map(([icon,label])=>({icon,label}));
-  const PHASE_COLORS = ['#495b35','#16806b','#4f7188','#627eaa','#7961b4','#9a6240','#a97b0c','#c25b4c','#aa637a','#72796c'];
+  const PHASE_COLORS = ['#495b35','#16806b','#4f7188','#7961b4','#9a6240','#a97b0c','#c25b4c','#aa637a','#72796c'];
   function phaseAppearance(p) {
     const legacy=KINDS.find(k=>k.kind===p.kind)||KINDS[0];
     return {icon:p.icon||legacy.icon,color:p.color||legacy.color,label:p.title};
@@ -376,7 +376,7 @@
     let phases = clone(currentPhases);
     if (payload.phases !== undefined) {
       if (!Array.isArray(payload.phases) || payload.phases.some(p => !p || !idOK(p.id)) || new Set(payload.phases.map(p=>p.id)).size !== payload.phases.length) throw new Error('Некорректные периоды.');
-      phases = payload.phases.map(p => phaseInput({ id:p.id,kind:p.kind,title:p.title,note:p.note,...(p.icon!==undefined?{icon:p.icon}:{}),...(p.color!==undefined?{color:p.color}:{}),startedAt:p.started_at,endedAt:p.ended_at == null ? null : p.ended_at }));
+      phases = payload.phases.map(p => ({ ...phaseInput({ id:p.id,kind:p.kind,title:p.title,note:p.note,...(p.icon!==undefined?{icon:p.icon}:{}),...(p.color!==undefined?{color:p.color}:{}),startedAt:p.started_at,endedAt:p.ended_at == null ? null : p.ended_at }), createdAt: p.created_at ? iso(p.created_at) : iso(p.started_at) }));
     }
     if(enforcePhaseLimit)assertPhaseLimit(phases);
     return { sessions,phases };

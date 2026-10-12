@@ -1,6 +1,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const vm=require('node:vm');
 const {test}=require('node:test');
 const ts=require('typescript');
 const I=require('../i18n.js');
@@ -101,6 +102,31 @@ test('numbers, plural counts and calendar dates use the selected locale while ti
   for(const locale of [ru,en,fr,es,de])assert.equal(locale.date(day,{hour:'2-digit',minute:'2-digit'}),'22:15');
 });
 
+test('all diary counts remain localized when the runtime has no Intl.PluralRules',()=>{
+  const nativeLikeIntl={DateTimeFormat:Intl.DateTimeFormat,NumberFormat:Intl.NumberFormat};
+  const module={exports:{}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../i18n.js'),'utf8'),{
+    module,
+    require:name=>{assert.equal(name,'./translations.js');return catalog;},
+    Intl:nativeLikeIntl,
+  },{filename:'native-i18n-without-plural-rules.js'});
+  const locale=module.exports.create('ru');
+  const counts=[...Array.from({length:201},(_,i)=>i),1001,1011,1021,2026,1000000,-1,-2,-5,0.5,1.2,2.5,NaN,Infinity];
+  for(const {code} of I.languages){
+    locale.setLanguage(code);
+    const reference=I.create(code);
+    for(const unit of ['records','periods','readings']){
+      for(const count of counts){
+        assert.equal(locale.count(count,unit),reference.count(count,unit),`${code}: ${count} ${unit}`);
+      }
+    }
+    assert.equal(locale.number(121.7,1),reference.number(121.7,1));
+    const day=new Date(2026,9,10,22,15);
+    assert.equal(locale.date(day,{month:'long',year:'numeric'}),reference.date(day,{month:'long',year:'numeric'}));
+  }
+  assert.equal(nativeLikeIntl.PluralRules,undefined);
+});
+
 test('model validation sentences translate together without changing canonical model errors',()=>{
   const original='Введите пульс. Верхнее: 60–260; нижнее: 35–160; пульс: 30–220. Верхнее должно быть больше нижнего.';
   const text=I.create('fr').text(original);
@@ -133,12 +159,17 @@ test('all explicit interface literals and translated HTML fragments are covered 
       else check(part);
     }
   };
+  function checkArgument(node) {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) check(node.text);
+    else if (ts.isConditionalExpression(node)) { checkArgument(node.whenTrue); checkArgument(node.whenFalse); }
+  }
   for(const file of files){
   const source=ts.createSourceFile(file,fs.readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true,file.endsWith('.js')?ts.ScriptKind.JS:ts.ScriptKind.TSX);
   function visit(node){
     if(ts.isCallExpression(node)&&['tr','html'].includes(node.expression.getText(source))){
       const argument=node.arguments[0];
-      if(argument&&(ts.isStringLiteral(argument)||ts.isNoSubstitutionTemplateLiteral(argument))) (node.expression.getText(source)==='tr'?check:checkHTML)(argument.text);
+      if(argument && node.expression.getText(source)==='tr') checkArgument(argument);
+      else if(argument&&(ts.isStringLiteral(argument)||ts.isNoSubstitutionTemplateLiteral(argument))) checkHTML(argument.text);
     }
     if(ts.isTaggedTemplateExpression(node)&&['tr','html'].includes(node.tag.getText(source))){
       const template=node.template;
@@ -155,10 +186,12 @@ test('all explicit interface literals and translated HTML fragments are covered 
 test('static native choices and errors are translated while canonical tags and backup identifiers remain Russian',()=>{
   const sources=['components/measurement-entry.tsx','components/history-filters.tsx','constants/history-filters.ts','constants/statistics-data.ts','types/experiment.ts'];
   const root=path.join(__dirname,'../..');
+  sources.push(...fs.readdirSync(path.join(root,'components/clarity')).filter(file=>/\.tsx?$/.test(file)).map(file=>'components/clarity/'+file));
   const missing=[];
   for(const file of sources){
     const source=ts.createSourceFile(file,fs.readFileSync(path.join(root,file),'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
     function visit(node){
+      if(file.startsWith('components/clarity/') && ts.isStringLiteral(node) && /[А-Яа-яЁё]/.test(node.text) && !catalog[I.normalize(node.text.trim()).text]) missing.push(node.text);
       if(ts.isPropertyAssignment(node)&&['title','label','unit','hint'].includes(node.name.getText(source))&&ts.isStringLiteral(node.initializer)&&/[А-Яа-яЁё]/.test(node.initializer.text)){
         if(!catalog[node.initializer.text])missing.push(node.initializer.text);
       }
