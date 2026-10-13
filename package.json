@@ -2,7 +2,7 @@
   "name": "blood-pressure-diary",
   "license": "0BSD",
   "main": "expo-router/entry",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -12,7 +12,7 @@
     "build:android": "npx eas-cli@latest build --platform android --profile android-internal",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --test scripts/database.test.cjs scripts/load-state.test.cjs scripts/clarity-ui.test.cjs scripts/diary-provider.test.cjs scripts/save-success.test.cjs",
+    "test": "node --test scripts/database.test.cjs scripts/load-state.test.cjs scripts/clarity-ui.test.cjs scripts/diary-provider.test.cjs scripts/save-success.test.cjs scripts/sheet-motion.test.cjs",
     "test:design": "node --test design-lab/tests/model.test.cjs design-lab/tests/local-backups.test.cjs design-lab/tests/i18n.test.cjs",
     "design": "node design-lab/serve.cjs",
     "typecheck": "tsc --noEmit"

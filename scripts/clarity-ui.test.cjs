@@ -16,7 +16,7 @@ function fixture(state = M.factoryState(), preferences = M.statisticsPreferences
     draft: async (value, mode) => { writes.push({ value, mode }); },
     change: async work => work(), flush: async () => {}, resetView: () => {} };
   const hooks = { useState: initial => [initial?.name === 'defaultFilters' && options.filters ? options.filters : typeof initial === 'function' ? initial() : initial, () => {}],
-    useRef: value => ({ current: value }), useEffect: () => {}, useCallback: value => value, useMemo: factory => factory() };
+    useRef: value => ({ current: value }), useEffect: effect => options.effects?.push(effect), useCallback: value => value, useMemo: factory => factory() };
   const load = relative => {
     const file = path.resolve(root, relative);
     if (modules.has(file)) return modules.get(file).exports;
@@ -25,7 +25,7 @@ function fixture(state = M.factoryState(), preferences = M.statisticsPreferences
       if (name === 'react') return hooks;
       if (name === 'react/jsx-runtime') return require(name);
       if (name === 'react-native') return { Text:'Text', View:'View', Pressable:'Pressable', TextInput:'TextInput', InputAccessoryView:'InputAccessoryView', ScrollView:'ScrollView', Modal:'Modal', FlatList:'FlatList',
-        Animated:{createAnimatedComponent:value=>value,Value:class {setValue(value){this.value=value;}stopAnimation(){}},timing:()=>({start:callback=>callback?.({finished:true})}),spring:()=>({start:()=>{}})},PanResponder:{create:value=>({panHandlers:value})},
+        Animated:{View:'AnimatedView',createAnimatedComponent:value=>value,Value:class {constructor(value){this.value=value;}setValue(value){this.value=value;}stopAnimation(callback){callback?.(this.value);}},timing:(value,config)=>({start:callback=>{value.setValue(config.toValue);callback?.({finished:true});},stop:()=>{}}),spring:(value,config)=>({start:()=>value.setValue(config.toValue),stop:()=>{}}),parallel:animations=>({start:callback=>{animations.forEach(animation=>animation.start());callback?.({finished:true});},stop:()=>animations.forEach(animation=>animation.stop())})},Easing:{out:value=>value,cubic:value=>value**3},PanResponder:{create:value=>({panHandlers:value})},
         StyleSheet:{create:value=>value,absoluteFill:{}},useWindowDimensions:()=>({width:402,height:852}),Alert:{alert:()=>{}},Platform:{OS:'ios'},Keyboard:{dismiss:()=>keyboard.push('dismiss')} };
       if (name === 'react-native-safe-area-context') return { SafeAreaView:'SafeAreaView' };
       if (name === 'react-native-svg') return { __esModule:true, default:'Svg', ...Object.fromEntries(['Circle','G','Line','Path','Text'].map(key=>[key,key])) };
@@ -258,8 +258,17 @@ test('comparison segmented calculation switch persists independently of statisti
 
 test('a sheet grabs its visible top handle immediately, dismisses downward, and respects a busy operation', () => {
   for(const dismissible of [true,false]) {
-    const h=fixture();let closed=0;
+    const effects=[],h=fixture(undefined,undefined,{effects});let closed=0;
     const nodes=h.expand(h.load('components/clarity/ui.tsx').Sheet({visible:true,title:'Test',dismissible,onClose:()=>closed++}));
+    effects.forEach(effect=>effect());
+    const modal=nodes.find(node=>node?.type==='Modal');
+    assert.equal(modal.props.animationType,'none');
+    assert.equal(modal.props.visible,false);
+    nodes.find(node=>node?.props?.testID==='sheet-content').props.onLayout({nativeEvent:{layout:{height:480}}});
+    modal.props.onShow();
+    const backdrop=nodes.find(node=>node?.props?.testID==='sheet-backdrop');
+    assert.equal(backdrop.props.pointerEvents,'none');
+    assert.ok(backdrop.props.style.every(style=>!style.transform));
     const handle=nodes.find(node=>node?.props?.testID==='sheet-drag-handle');
     assert.equal(handle.props.collapsable,false);
     assert.equal(handle.props.onStartShouldSetPanResponder(),dismissible);
@@ -267,6 +276,7 @@ test('a sheet grabs its visible top handle immediately, dismisses downward, and 
     assert.equal(handle.props.onPanResponderTerminationRequest(),false);
     assert.equal(handle.props.onMoveShouldSetPanResponder(null,{dy:30,dx:1}),dismissible);
     assert.equal(handle.props.onMoveShouldSetPanResponder(null,{dy:10,dx:35}),false);
+    handle.props.onPanResponderGrant();
     handle.props.onPanResponderRelease(null,{dy:15,vy:0.1});assert.equal(closed,0);
     handle.props.onPanResponderRelease(null,{dy:100,vy:1});assert.equal(closed,dismissible?1:0);
   }

@@ -29,6 +29,7 @@ import { useLanguage } from "@/localization/provider";
 import * as M from "../../design-lab/model";
 import { iconPaths } from "./icon-paths";
 import { useDiary } from "./diary-provider";
+import { createSheetMotion } from "./sheet-motion";
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
 
 export function CText({ style, ...props }: TextProps) {
@@ -594,11 +595,18 @@ export function Sheet({
   dismissible?: boolean;
 }>) {
   const { height } = useWindowDimensions();
-  const [offset] = useState(() => new Animated.Value(0));
+  // Mount the platform Modal after motion has received visible, so a picker
+  // first mounted open cannot deliver onShow before its opening is prepared.
+  const [present, setPresent] = useState(false);
+  const [motion] = useState(() => createSheetMotion(height, setPresent, onClose));
+  useEffect(() => { motion.setOnClose(onClose); }, [motion, onClose]);
   useEffect(() => {
-    offset.setValue(0);
-    return () => offset.stopAnimation();
-  }, [visible, offset]);
+    motion.activate();
+    return () => motion.dispose();
+  }, [motion]);
+  useEffect(() => { motion.setVisible(visible); }, [visible, motion]);
+  useEffect(() => { motion.setWindowHeight(height); }, [height, motion]);
+  const requestClose = () => { if (visible && dismissible) motion.dismiss(); };
   const drag = useMemo(() => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => visible && dismissible,
@@ -606,30 +614,32 @@ export function Sheet({
       onMoveShouldSetPanResponder: (_, gesture) => visible && dismissible && gesture.dy > 8 && gesture.dy > Math.abs(gesture.dx) * 1.3,
       onMoveShouldSetPanResponderCapture: (_, gesture) => visible && dismissible && gesture.dy > 8 && gesture.dy > Math.abs(gesture.dx) * 1.3,
       onPanResponderGrant: () => {
-        offset.stopAnimation();
+        motion.grab();
         Keyboard.dismiss();
       },
-      onPanResponderMove: (_, gesture) => offset.setValue(Math.max(0, gesture.dy)),
+      onPanResponderMove: (_, gesture) => motion.move(gesture.dy),
       onPanResponderRelease: (_, gesture) => {
-        if (dismissible && (gesture.dy > 80 || (gesture.dy > 25 && gesture.vy > 0.8))) {
-          Animated.timing(offset, { toValue: height, duration: 180, useNativeDriver: true }).start(({ finished }) => {
-            if (finished) onClose();
-          });
-        } else Animated.spring(offset, { toValue: 0, useNativeDriver: true }).start();
+        if (visible && dismissible && (gesture.dy > 80 || (gesture.dy > 25 && gesture.vy > 0.8))) motion.dismiss();
+        else motion.restore();
       },
       onPanResponderTerminationRequest: () => false,
-      onPanResponderTerminate: () => Animated.spring(offset, { toValue: 0, useNativeDriver: true }).start(),
+      onPanResponderTerminate: () => motion.restore(),
     });
-  }, [visible, dismissible, offset, height, onClose]);
-  const requestClose = () => { if (dismissible) onClose(); };
+  }, [visible, dismissible, motion]);
   return (
     <Modal
       transparent
-      animationType="slide"
-      visible={visible}
+      animationType="none"
+      visible={present}
+      onShow={() => motion.show()}
       onRequestClose={requestClose}
     >
       <View style={styles.overlay}>
+        <Animated.View
+          testID="sheet-backdrop"
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: motion.shade }]}
+        />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={tr("Закрыть")}
@@ -637,12 +647,14 @@ export function Sheet({
           style={StyleSheet.absoluteFill}
         />
         <AnimatedSafeAreaView
+          testID="sheet-content"
+          onLayout={event => motion.measure(event.nativeEvent.layout.height)}
           edges={["bottom"]}
           accessibilityViewIsModal
           style={[
             styles.sheet,
             stable && { height: Math.min(height * 0.88, 680) },
-            { transform: [{ translateY: offset }] },
+            { transform: [{ translateY: motion.offset }] },
           ]}
         >
           <View style={{ marginHorizontal: -20 }}>
@@ -777,9 +789,9 @@ export const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: "#262F3155",
     justifyContent: "flex-end",
   },
+  sheetBackdrop: { backgroundColor: "#262F3155" },
   sheet: {
     maxHeight: "92%",
     minHeight: "42%",
