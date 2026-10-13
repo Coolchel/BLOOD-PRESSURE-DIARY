@@ -753,7 +753,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   rowPressed: {
-    backgroundColor: Palette.coralSoft,
+    opacity: 0.72,
   },
   toggleRow: {
     minHeight: 72,

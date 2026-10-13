@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Keyboard,
-  InputAccessoryView,
   Platform,
   Pressable,
   StyleSheet,
@@ -297,13 +296,19 @@ export function EntryScreen() {
                     {tr(label)}
                   </Text>
                   <TextInput
+                    // Recreate the native iOS toolbar when a series changes its last field or the language changes.
+                    key={Platform.OS === "ios" ? tr(field === "pulse" && index === value.readings.length - 1 ? "Готово" : "Далее") : field}
                     ref={(input) => {
                       inputs.current[index + ":" + field] = input;
                     }}
                     accessibilityLabel={tr(label)}
                     testID={"reading-" + index + "-" + field}
                     keyboardType="number-pad"
-                    inputAccessoryViewID={Platform.OS === "ios" ? "clarity-numeric-input" : undefined}
+                    inputAccessoryViewButtonLabel={
+                      Platform.OS === "ios"
+                        ? tr(field === "pulse" && index === value.readings.length - 1 ? "Готово" : "Далее")
+                        : undefined
+                    }
                     returnKeyType={
                       field === "pulse" && index === value.readings.length - 1
                         ? "done"
@@ -490,13 +495,6 @@ export function EntryScreen() {
           })
         }
       />
-      {Platform.OS === "ios" ? <InputAccessoryView nativeID="clarity-numeric-input" backgroundColor={P.surface}>
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", borderTopWidth: 1, borderColor: P.line }}>
-          <Pressable accessibilityRole="button" onPress={() => advance(editing)} style={{ minHeight: 44, paddingHorizontal: 22, justifyContent: "center" }}>
-            <Text style={{ color: P.coral }}>{tr(editing === (value.readings.length - 1) + ":pulse" ? "Готово" : "Далее")}</Text>
-          </Pressable>
-        </View>
-      </InputAccessoryView> : null}
     </Screen>
   );
 }

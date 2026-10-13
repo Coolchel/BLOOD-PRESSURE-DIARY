@@ -2,7 +2,7 @@
   "expo": {
     "name": "Давление",
     "slug": "blood-pressure-diary",
-    "version": "0.8.1",
+    "version": "0.8.2",
     "orientation": "portrait",
     "icon": "./assets/images/clarity-app-icon.png",
     "scheme": "bloodpressure",
@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.eggplant4287.coral6481",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIFileSharingEnabled": true,

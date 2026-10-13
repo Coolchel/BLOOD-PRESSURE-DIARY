@@ -188,13 +188,51 @@ test('chart date labels never collide with the final date at narrow widths', () 
   }
 });
 
-test('numeric entry uses a digits-only keyboard with an iOS accessory and tappable wellbeing track', () => {
+test('numeric entry uses a digits-only keyboard with per-field native actions and a tappable wellbeing track', () => {
   const h=fixture(),nodes=h.expand(h.load('components/clarity/forms.tsx').EntryScreen());
   const inputs=nodes.filter(node=>node?.props?.testID?.startsWith('reading-'));
-  for(const input of inputs){assert.equal(input.props.keyboardType,'number-pad');assert.equal(input.props.inputAccessoryViewID,'clarity-numeric-input');}
-  assert.ok(nodes.some(node=>node?.type==='InputAccessoryView'&&node.props.nativeID==='clarity-numeric-input'));
+  for(const input of inputs){assert.equal(input.props.keyboardType,'number-pad');assert.equal(input.props.inputAccessoryViewID,undefined);}
+  assert.deepEqual(inputs.map(input=>input.props.inputAccessoryViewButtonLabel),['Далее','Далее','Готово']);
+  assert.ok(!nodes.some(node=>node?.type==='InputAccessoryView'));
   const slider=nodes.find(node=>node?.type==='Slider');assert.equal(slider.props.tapToSeek,true);
   slider.props.onValueChange(9);assert.equal(h.writes.at(-1).value.wellbeing,9);
+});
+
+test('opening the lower-pressure field first retains its Next action and advances straight to pulse', () => {
+  const h=fixture(),nodes=h.expand(h.load('components/clarity/forms.tsx').EntryScreen());
+  const inputs=nodes.filter(node=>node?.props?.testID?.startsWith('reading-'));
+  const focused=[];
+  for(const input of inputs) input.props.ref({focus:()=>focused.push(input.props.testID)});
+  const lower=inputs.find(input=>input.props.testID==='reading-0-diastolic');
+  lower.props.onFocus();
+  assert.equal(lower.props.inputAccessoryViewButtonLabel,'Далее');
+  assert.equal(lower.props.submitBehavior,'submit');
+  lower.props.onSubmitEditing();
+  assert.deepEqual(focused,['reading-0-pulse']);
+  inputs.find(input=>input.props.testID==='reading-0-pulse').props.onSubmitEditing();
+  assert.deepEqual(h.keyboard,['dismiss']);
+});
+
+test('adding a series reading changes the former last pulse from Done to Next without losing values', () => {
+  const pulseKeys=[];
+  for(const count of [2,3]) {
+    const draft=M.newDraft('series');
+    draft.readings[0].systolic='120';
+    if(count===3) draft.readings.push(M.newReading());
+    const h=fixture({...M.factoryState(),draftMode:'series',drafts:{single:null,series:draft}});
+    const nodes=h.expand(h.load('components/clarity/forms.tsx').EntryScreen());
+    const inputs=nodes.filter(node=>node?.props?.testID?.startsWith('reading-'));
+    assert.equal(inputs[0].props.value,'120');
+    const formerLast=inputs.find(input=>input.props.testID==='reading-1-pulse');
+    pulseKeys.push(formerLast.key);
+    assert.equal(formerLast.props.inputAccessoryViewButtonLabel,count===2?'Готово':'Далее');
+    const focused=[];
+    for(const input of inputs) input.props.ref({focus:()=>focused.push(input.props.testID)});
+    formerLast.props.onSubmitEditing();
+    assert.deepEqual(focused,count===2?[]:['reading-2-systolic']);
+    assert.deepEqual(h.keyboard,count===2?['dismiss']:[]);
+  }
+  assert.notEqual(pulseKeys[0],pulseKeys[1]);
 });
 
 test('history filter badge counts conditions, includes a temporary period, and excludes sorting', () => {
@@ -218,14 +256,23 @@ test('comparison segmented calculation switch persists independently of statisti
   assert.equal(h.diary.preferences.compareSummary,'median');assert.equal(h.diary.preferences.summary,'mean');
 });
 
-test('a sheet closes on a downward header swipe, returns after short drags, and respects a busy operation', () => {
+test('a sheet grabs its visible top handle immediately, dismisses downward, and respects a busy operation', () => {
   for(const dismissible of [true,false]) {
     const h=fixture();let closed=0;
     const nodes=h.expand(h.load('components/clarity/ui.tsx').Sheet({visible:true,title:'Test',dismissible,onClose:()=>closed++}));
     const handle=nodes.find(node=>node?.props?.testID==='sheet-drag-handle');
+    assert.equal(handle.props.collapsable,false);
+    assert.equal(handle.props.onStartShouldSetPanResponder(),dismissible);
+    assert.equal(handle.props.onStartShouldSetPanResponderCapture(),dismissible);
+    assert.equal(handle.props.onPanResponderTerminationRequest(),false);
     assert.equal(handle.props.onMoveShouldSetPanResponder(null,{dy:30,dx:1}),dismissible);
     assert.equal(handle.props.onMoveShouldSetPanResponder(null,{dy:10,dx:35}),false);
     handle.props.onPanResponderRelease(null,{dy:15,vy:0.1});assert.equal(closed,0);
     handle.props.onPanResponderRelease(null,{dy:100,vy:1});assert.equal(closed,dismissible?1:0);
   }
+  const h=fixture();let closed=0;
+  const nodes=h.expand(h.load('components/clarity/ui.tsx').Sheet({visible:false,title:'Test',onClose:()=>closed++}));
+  const handle=nodes.find(node=>node?.props?.testID==='sheet-drag-handle');
+  assert.equal(handle.props.onStartShouldSetPanResponder(),false);
+  assert.equal(handle.props.onMoveShouldSetPanResponder(null,{dy:30,dx:1}),false);
 });

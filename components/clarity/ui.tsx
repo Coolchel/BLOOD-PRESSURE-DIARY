@@ -601,18 +601,24 @@ export function Sheet({
   }, [visible, offset]);
   const drag = useMemo(() => {
     return PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => visible && dismissible && gesture.dy > 8 && gesture.dy > Math.abs(gesture.dx) * 1.3,
-    onMoveShouldSetPanResponderCapture: (_, gesture) => visible && dismissible && gesture.dy > 8 && gesture.dy > Math.abs(gesture.dx) * 1.3,
-    onPanResponderGrant: () => Keyboard.dismiss(),
-    onPanResponderMove: (_, gesture) => offset.setValue(Math.max(0, gesture.dy)),
-    onPanResponderRelease: (_, gesture) => {
-      if (dismissible && (gesture.dy > 80 || (gesture.dy > 25 && gesture.vy > 0.8))) {
-        Animated.timing(offset, { toValue: height, duration: 180, useNativeDriver: true }).start(({ finished }) => {
-          if (finished) onClose();
-        });
-      } else Animated.spring(offset, { toValue: 0, useNativeDriver: true }).start();
-    },
-    onPanResponderTerminate: () => Animated.spring(offset, { toValue: 0, useNativeDriver: true }).start(),
+      onStartShouldSetPanResponder: () => visible && dismissible,
+      onStartShouldSetPanResponderCapture: () => visible && dismissible,
+      onMoveShouldSetPanResponder: (_, gesture) => visible && dismissible && gesture.dy > 8 && gesture.dy > Math.abs(gesture.dx) * 1.3,
+      onMoveShouldSetPanResponderCapture: (_, gesture) => visible && dismissible && gesture.dy > 8 && gesture.dy > Math.abs(gesture.dx) * 1.3,
+      onPanResponderGrant: () => {
+        offset.stopAnimation();
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gesture) => offset.setValue(Math.max(0, gesture.dy)),
+      onPanResponderRelease: (_, gesture) => {
+        if (dismissible && (gesture.dy > 80 || (gesture.dy > 25 && gesture.vy > 0.8))) {
+          Animated.timing(offset, { toValue: height, duration: 180, useNativeDriver: true }).start(({ finished }) => {
+            if (finished) onClose();
+          });
+        } else Animated.spring(offset, { toValue: 0, useNativeDriver: true }).start();
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderTerminate: () => Animated.spring(offset, { toValue: 0, useNativeDriver: true }).start(),
     });
   }, [visible, dismissible, offset, height, onClose]);
   const requestClose = () => { if (dismissible) onClose(); };
@@ -639,9 +645,11 @@ export function Sheet({
             { transform: [{ translateY: offset }] },
           ]}
         >
-          <View testID="sheet-drag-handle" {...drag.panHandlers} style={{ paddingTop: 8, gap: 12 }}>
-            <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: P.line, alignSelf: "center" }} />
-            <View style={styles.spread}>
+          <View style={{ marginHorizontal: -20 }}>
+            <View testID="sheet-drag-handle" collapsable={false} {...drag.panHandlers} style={styles.sheetHandle}>
+              <View pointerEvents="none" style={styles.sheetHandleBar} />
+            </View>
+            <View style={[styles.spread, { paddingHorizontal: 20 }]}>
               <CText style={{ fontSize: 22, flex: 1 }}>{title}</CText>
               <IconButton icon="close" label={tr("Закрыть")} onPress={requestClose} />
             </View>
@@ -779,9 +787,20 @@ export const styles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 20,
-    paddingTop: 4,
+    paddingTop: 0,
     paddingBottom: 20,
     gap: 12,
+  },
+  sheetHandle: {
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetHandleBar: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: P.line,
   },
   nav: {
     flexDirection: "row",

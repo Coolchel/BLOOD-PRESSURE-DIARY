@@ -1149,11 +1149,28 @@ export function StatisticsScreen() {
               right={
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityLabel={tr("Показатели графика")}
                   onPress={() => setMetricOpen(true)}
+                  style={({ pressed }) => [
+                    styles.row,
+                    {
+                      minHeight: 34,
+                      paddingHorizontal: 12,
+                      gap: 6,
+                      borderRadius: 17,
+                      borderWidth: 1,
+                      borderColor: P.line,
+                      backgroundColor: P.surface,
+                      opacity: pressed ? 0.72 : 1,
+                    },
+                  ]}
                 >
                   <Text style={{ fontSize: 12, color: P.coral }}>
-                    {tr("Показатели")}⌄
+                    {tr("Показатели")}
                   </Text>
+                  <View style={{ transform: [{ rotate: "90deg" }] }}>
+                    <Icon name="chevron" size={14} />
+                  </View>
                 </Pressable>
               }
             >
