@@ -184,9 +184,8 @@ test('all explicit interface literals and translated HTML fragments are covered 
 });
 
 test('static native choices and errors are translated while canonical tags and backup identifiers remain Russian',()=>{
-  const sources=['components/measurement-entry.tsx','components/history-filters.tsx','constants/history-filters.ts','constants/statistics-data.ts','types/experiment.ts'];
   const root=path.join(__dirname,'../..');
-  sources.push(...fs.readdirSync(path.join(root,'components/clarity')).filter(file=>/\.tsx?$/.test(file)).map(file=>'components/clarity/'+file));
+  const sources=fs.readdirSync(path.join(root,'components/clarity')).filter(file=>/\.tsx?$/.test(file)).map(file=>'components/clarity/'+file);
   const missing=[];
   for(const file of sources){
     const source=ts.createSourceFile(file,fs.readFileSync(path.join(root,file),'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);

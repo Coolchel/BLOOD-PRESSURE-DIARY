@@ -1,65 +1,10 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import { measurementStats } from "@/constants/measurement-stats";
 import * as DiaryModel from "../design-lab/model";
 import { withDiaryTransaction, withDiaryWrite } from "./write-queue";
 
-import type {
-  MeasurementDetails,
-  MeasurementDraft,
-  MeasurementQuery,
-  MeasurementReading,
-  MeasurementSort,
-  MeasurementSummary,
-  Reading,
-} from "@/types/measurement";
-import type {
-  ExperimentPhase,
-  PhaseKind,
-  PhaseStats,
-  PhaseWithStats,
-} from "@/types/experiment";
-
-type MeasurementRow = {
-  id: number;
-  measured_at: string;
-  wellbeing: number;
-  tags_json: string;
-  note: string;
-  mode: string;
-  systolic: number;
-  diastolic: number;
-  pulse: number;
-  reading_count: number;
-};
-
-function rowToSummary(row: MeasurementRow): MeasurementSummary {
-  let tags: string[] = [];
-
-  try {
-    tags = JSON.parse(row.tags_json) as string[];
-  } catch {
-    tags = [];
-  }
-
-  return {
-    id: row.id,
-    measuredAt: row.measured_at,
-    wellbeing: row.wellbeing,
-    tags,
-    note: row.note,
-    mode: row.mode === "series" ? "series" : "single",
-    systolic: Math.round(row.systolic),
-    diastolic: Math.round(row.diastolic),
-    pulse: Math.round(row.pulse),
-    readingCount: row.reading_count,
-    averages: {
-      systolic: row.systolic,
-      diastolic: row.diastolic,
-      pulse: row.pulse,
-    },
-  };
-}
+import type { MeasurementDraft, Reading } from "@/types/measurement";
+import type { ExperimentPhase, PhaseKind } from "@/types/experiment";
 
 export async function initializeDatabase(db: SQLiteDatabase) {
   return withDiaryWrite(db, () => initializeSchema(db));
@@ -210,85 +155,6 @@ export async function addMeasurement(
     }
     return session.lastInsertRowId;
   });
-}
-
-export async function getMeasurements(
-  db: SQLiteDatabase,
-  limit = 60,
-  query: MeasurementQuery = {},
-): Promise<MeasurementSummary[]> {
-  const orders: Record<MeasurementSort, string> = {
-    newest: "s.measured_at DESC, s.id DESC",
-    oldest: "s.measured_at ASC, s.id ASC",
-    "systolic-desc": "AVG(r.systolic) DESC, s.measured_at DESC, s.id DESC",
-    "systolic-asc": "AVG(r.systolic) ASC, s.measured_at DESC, s.id DESC",
-    "diastolic-desc": "AVG(r.diastolic) DESC, s.measured_at DESC, s.id DESC",
-    "diastolic-asc": "AVG(r.diastolic) ASC, s.measured_at DESC, s.id DESC",
-    "pulse-desc": "AVG(r.pulse) DESC, s.measured_at DESC, s.id DESC",
-    "pulse-asc": "AVG(r.pulse) ASC, s.measured_at DESC, s.id DESC",
-  };
-  const rows = await db.getAllAsync<MeasurementRow>(
-    `SELECT
-      s.id,
-      s.measured_at,
-      s.wellbeing,
-      s.tags_json,
-      s.note,
-      s.mode,
-      AVG(r.systolic) AS systolic,
-      AVG(r.diastolic) AS diastolic,
-      AVG(r.pulse) AS pulse,
-      COUNT(r.id) AS reading_count
-     FROM measurement_sessions s
-     JOIN measurement_readings r ON r.session_id = s.id
-     WHERE (? IS NULL OR s.measured_at >= ?) AND (? IS NULL OR s.measured_at < ?)
-     GROUP BY s.id
-     ORDER BY ${orders[query.sort ?? "newest"] ?? orders.newest}
-     LIMIT ?`,
-    query.from ?? null,
-    query.from ?? null,
-    query.until ?? null,
-    query.until ?? null,
-    limit,
-  );
-
-  return rows.map(rowToSummary);
-}
-
-export async function getMeasurementById(
-  db: SQLiteDatabase,
-  id: number,
-): Promise<MeasurementDetails | null> {
-  const row = await db.getFirstAsync<MeasurementRow>(
-    `SELECT
-      s.id,
-      s.measured_at,
-      s.wellbeing,
-      s.tags_json,
-      s.note,
-      s.mode,
-      AVG(r.systolic) AS systolic,
-      AVG(r.diastolic) AS diastolic,
-      AVG(r.pulse) AS pulse,
-      COUNT(r.id) AS reading_count
-     FROM measurement_sessions s
-     JOIN measurement_readings r ON r.session_id = s.id
-     WHERE s.id = ?
-     GROUP BY s.id`,
-    id,
-  );
-
-  if (!row) return null;
-
-  const readings = await db.getAllAsync<MeasurementReading>(
-    `SELECT systolic, diastolic, pulse, measured_at AS measuredAt
-     FROM measurement_readings
-     WHERE session_id = ?
-     ORDER BY position`,
-    id,
-  );
-
-  return { ...rowToSummary(row), readings };
 }
 
 export async function clearMeasurements(db: SQLiteDatabase) {
@@ -648,17 +514,9 @@ export async function updateMeasurementNote(
   );
 }
 
-export async function countMeasurements(
-  db: SQLiteDatabase,
-  query: MeasurementQuery = {},
-) {
+export async function countMeasurements(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ total: number }>(
-    `SELECT COUNT(*) AS total FROM measurement_sessions
-     WHERE (? IS NULL OR measured_at >= ?) AND (? IS NULL OR measured_at < ?)`,
-    query.from ?? null,
-    query.from ?? null,
-    query.until ?? null,
-    query.until ?? null,
+    "SELECT COUNT(*) AS total FROM measurement_sessions",
   );
 
   return row?.total ?? 0;
@@ -843,64 +701,6 @@ export async function getPhases(
   );
 
   return rows.map(rowToPhase);
-}
-
-export async function getPhaseById(db: SQLiteDatabase, id: number) {
-  const row = await db.getFirstAsync<PhaseRow>(
-    `SELECT id, kind, title, icon, color, started_at, ended_at, note
-     FROM experiment_phases
-     WHERE id = ?`,
-    id,
-  );
-
-  return row ? rowToPhase(row) : null;
-}
-
-async function getPhaseStats(
-  db: SQLiteDatabase,
-  phase: ExperimentPhase,
-): Promise<PhaseStats> {
-  return measurementStats(await getMeasurementsInPhase(db, phase));
-}
-
-export async function getPhasesWithStats(
-  db: SQLiteDatabase,
-): Promise<PhaseWithStats[]> {
-  const phases = await getPhases(db);
-  const stats = await Promise.all(
-    phases.map((phase) => getPhaseStats(db, phase)),
-  );
-
-  return phases.map((phase, index) => ({ ...phase, stats: stats[index] }));
-}
-
-export async function getMeasurementsInPhase(
-  db: SQLiteDatabase,
-  phase: ExperimentPhase,
-): Promise<MeasurementSummary[]> {
-  const rows = await db.getAllAsync<MeasurementRow>(
-    `SELECT
-      s.id,
-      s.measured_at,
-      s.wellbeing,
-      s.tags_json,
-      s.note,
-      s.mode,
-      AVG(r.systolic) AS systolic,
-      AVG(r.diastolic) AS diastolic,
-      AVG(r.pulse) AS pulse,
-      COUNT(r.id) AS reading_count
-     FROM measurement_sessions s
-     JOIN measurement_readings r ON r.session_id = s.id
-     WHERE s.measured_at >= ? AND (? IS NULL OR s.measured_at < ?)
-     GROUP BY s.id
-     ORDER BY s.measured_at DESC, s.id DESC`,
-    phase.startedAt,
-    phase.endedAt,
-    phase.endedAt,
-  );
-
-  return rows.map(rowToSummary);
 }
 
 export type PhaseInput = {

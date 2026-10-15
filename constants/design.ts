@@ -10,7 +10,6 @@ export const Palette = {
   orange: '#A96943',
   orangeSoft: '#F3EAE0',
   line: '#DCDED1',
-  shadow: '#72796C',
   white: '#FFFFFF',
   success: '#495B35',
   pulse: '#4F7188',
@@ -33,21 +32,4 @@ export const Spacing = {
   md: 16,
   lg: 22,
   xl: 30,
-} as const;
-
-export const Shadow = {
-  card: {
-    shadowColor: Palette.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-    elevation: 6,
-  },
-  button: {
-    shadowColor: Palette.coral,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 6,
-  },
 } as const;

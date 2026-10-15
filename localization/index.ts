@@ -5,5 +5,4 @@ import { create } from '../design-lab/i18n';
 export const appLocale = create();
 export const tr = appLocale.text;
 export const getLocale = () => appLocale.locale;
-export const formatNumber = (value: number, decimals = 0) => appLocale.number(value, decimals);
 export const countRecords = (value: number) => appLocale.count(value, 'records');

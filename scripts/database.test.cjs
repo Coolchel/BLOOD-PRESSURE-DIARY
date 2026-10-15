@@ -67,10 +67,6 @@ const api = loadTS('data/database.ts');
 const { appLocale } = loadTS('localization/index.ts');
 appLocale.setLanguage('ru');
 const { loadAppLanguage, saveAppLanguage, LANGUAGE_SETTING } = loadTS('localization/preferences.ts');
-const { measurementStats } = loadTS('constants/measurement-stats.ts');
-const { cleanBaseline } = loadTS('constants/phase-format.ts');
-const { findPhaseFor } = loadTS('types/experiment.ts');
-const { savePhase, removePhase } = loadTS('data/phase-actions.ts');
 const { setAutoBackupEnabled, runAutoBackup, getLastAutoBackupAt, getBackupLocation, getBackupError,
   readStoredBackup, changeBackupLocation, factoryResetDiary, BackupDestinationExistsError, BACKUP_INTERVAL_MS } = loadTS('data/auto-backup.ts');
 const { backupFacts } = loadTS('data/backup-info.ts');
@@ -135,11 +131,6 @@ test('opening a native backup folder checks file presence without parsing its po
   assert.equal(await hasBackupFile(external), true);
   assert.equal(await hasBackupFile({ ...external, uri: 'content://other-folder' }), false);
 });
-const { DEFAULT_HISTORY_FILTERS, historyQuery } = loadTS('constants/history-filters.ts');
-const { chartTimeline } = loadTS('constants/chart-data.ts');
-const { statisticsWindow, measurementsInWindow, statisticsForPhase } = loadTS('constants/statistics-data.ts');
-const { isEntryValid, readingsFromEntries } = loadTS('constants/measurement-entry.ts');
-const { WeeklyChart } = loadTS('components/weekly-chart.tsx');
 const iso = (day) => `2026-09-${String(day).padStart(2, '0')}T12:00:00.000Z`;
 const reading = (systolic = 120) => ({ systolic, diastolic: 80, pulse: 70 });
 const draft = (day = 10, readings = [reading()], wellbeing = 7) => ({
@@ -174,6 +165,19 @@ async function fixture(t) {
 async function snapshot(db) {
   const { exportedAt, ...content } = await api.buildBackupPayload(db);
   return content;
+}
+
+async function sessions(db) {
+  return (await clarity.readClarityState(db)).sessions;
+}
+
+async function session(db, id) {
+  return (await sessions(db)).find((item) => item.id === id);
+}
+
+async function readingTimes(db, sessionId) {
+  const rows = await db.getAllAsync('SELECT measured_at FROM measurement_readings WHERE session_id = ? ORDER BY position', sessionId);
+  return rows.map((row) => row.measured_at);
 }
 
 test('native first launch uses the system language and unsupported locales use English without writing preferences', async t => {
@@ -238,7 +242,7 @@ test('factory reset removes records, phases, drafts and all managed copies witho
   assert.deepEqual([...files],[['unrelated.json','keep']]);
   await api.initializeDatabase(db);assert.deepEqual(await api.getPhases(db),[]);
   assert.equal(await runAutoBackup(db,Date.parse(iso(12))),'empty');
-  await api.addMeasurement(db,draft());assert.equal((await api.getMeasurements(db))[0].id,1);
+  await api.addMeasurement(db,draft());assert.deepEqual((await sessions(db)).map(item=>item.id),[1]);
 });
 
 test('factory reset rolls back database and copy bytes when its database transaction fails',async t=>{
@@ -273,39 +277,18 @@ test('saved-copy facts use snapshot contents after later journal changes',async 
   assert.throws(()=>backupFacts({app:'Давление',exportedAt:'invalid',sessions:[],readings:[]}),/прочитать/);
 });
 
-test('history can reveal all 450 records, including equal timestamps, with the full count', async (t) => {
-  const db = await fixture(t);
-  for (let index = 0; index < 450; index += 1) {
-    await api.addMeasurement(db, draft(10, [reading(index === 0 ? 200 : 120)]));
-  }
-  assert.equal(await api.countMeasurements(db), 450);
-  const first = await api.getMeasurements(db, 200);
-  const second = await api.getMeasurements(db, 400);
-  const all = await api.getMeasurements(db, 600);
-  assert.equal(first.length, 200);
-  assert.equal(second.length, 400);
-  assert.equal(all.length, 450);
-  assert.deepEqual(second.slice(0, 200), first);
-  assert.deepEqual(all.slice(0, 400), second);
-  assert.equal(new Set(all.map((item) => item.id)).size, 450);
-  assert.equal(all[0].id, 450);
-  assert.equal(all[449].id, 1);
-  // The highest value belongs to a record outside the first page in chronological order.
-  const sorted = await api.getMeasurements(db, 200, { sort: 'systolic-desc' });
-  assert.equal(sorted[0].id, 1);
-  assert.equal(sorted.length, 200);
-});
-
 test('independent periods stay open and one measurement belongs to every matching period', async (t) => {
   const db = await fixture(t);
   await api.createPhase(db, phase(1));
   await api.createPhase(db, phase(10, null, 'coffee'));
   await api.addMeasurement(db, draft(9));
   await api.addMeasurement(db, draft(10));
-  const phases = await api.getPhasesWithStats(db);
+  const { sessions: items, phases } = await clarity.readClarityState(db);
   assert.equal(phases.find((item) => item.kind === 'clean').endedAt, null);
-  assert.deepEqual(phases.map((item) => item.stats.count), [1, 2]);
-  assert.equal(findPhaseFor(iso(10), phases).kind, 'coffee');
+  const count = (kind) => items.filter((item) => M.inside(item, phases.find((p) => p.kind === kind))).length;
+  assert.deepEqual([count('clean'), count('coffee')], [2, 1]);
+  const matching = M.phasesFor(items.find((item) => item.measuredAt === iso(10)), phases);
+  assert.deepEqual(matching.map((item) => item.kind).sort(), ['clean', 'coffee']);
   await api.createPhase(db, phase(10));
   const before = await snapshot(db);
   await assert.rejects(api.createPhase(db, phase(10)), api.PhaseOverlapError);
@@ -326,7 +309,7 @@ test('four overlapping closed periods and conflicting edits are rejected without
   await assert.rejects(api.updatePhase(db, coffee.id, phase(20, 10, 'coffee')));
   assert.deepEqual(await snapshot(db), before);
   await api.updatePhase(db, coffee.id, phase(11, 19, 'coffee'));
-  assert.equal((await api.getPhaseById(db, coffee.id)).startedAt, iso(11));
+  assert.equal((await api.getPhases(db)).find((item) => item.id === coffee.id).startedAt, iso(11));
 });
 
 test('a failed creation does not close an open predecessor', async (t) => {
@@ -433,7 +416,7 @@ test('valid backups round-trip, normalize timezones, and older backups preserve 
   legacy.sessions[0].measured_at = '2026-09-10T15:00:00+03:00';
   const result = await api.restoreBackup(db, legacy);
   assert.equal(result.phases, null);
-  assert.equal((await api.getMeasurements(db))[0].measuredAt, iso(10));
+  assert.equal((await db.getFirstAsync('SELECT measured_at FROM measurement_sessions')).measured_at, iso(10));
   assert.deepEqual((await snapshot(db)).phases, before.phases);
 });
 
@@ -444,29 +427,7 @@ test('invalid series cannot be written through the data API', async (t) => {
   assert.equal(await api.countMeasurements(db), 0);
   await api.addMeasurement(db, draft(10, [reading(), reading()]));
   await api.addMeasurement(db, draft(10, [reading(), reading(), reading()]));
-  assert.deepEqual((await api.getMeasurements(db)).map((item) => item.readingCount), [3, 2]);
-});
-
-test('period summaries, detail data, exports and baseline retain unrounded means until the final result', async (t) => {
-  const db = await fixture(t);
-  await api.createPhase(db, phase(1, 15));
-  await api.createPhase(db, phase(15, 25));
-  // 120.5 and 120: rounding the first series early would produce 121 instead of 120.
-  await api.addMeasurement(db, draft(10, [reading(120), reading(121)], 7));
-  await api.addMeasurement(db, draft(11, [reading(120)], 8));
-  await api.addMeasurement(db, draft(20, [reading(120)], 8));
-  const phases = await api.getPhasesWithStats(db);
-  for (const item of phases) {
-    const detailStats = measurementStats(await api.getMeasurementsInPhase(db, item));
-    const exportStats = measurementStats((await api.getMeasurements(db, -1)).filter((m) =>
-      findPhaseFor(m.measuredAt, phases)?.id === item.id));
-    assert.deepEqual(item.stats, detailStats);
-    assert.deepEqual(item.stats, exportStats);
-    assert.equal(item.stats.systolic, 120);
-  }
-  assert.equal(phases.find((p) => p.startedAt === iso(1)).stats.wellbeing, 7.5);
-  assert.deepEqual(cleanBaseline(phases), measurementStats(await api.getMeasurements(db, -1)));
-  assert.equal((await api.getMeasurementById(db, 1)).averages.systolic, 120.5);
+  assert.deepEqual((await sessions(db)).map((item) => [item.id, item.readings.length]).sort((a, b) => a[0] - b[0]), [[1, 2], [2, 3]]);
 });
 
 test('period actions leave the saved JSON untouched until the next eligible opening', async (t) => {
@@ -476,16 +437,16 @@ test('period actions leave the saved JSON untouched until the next eligible open
   const opened=Date.parse('2026-10-10T23:50:00Z');
   assert.equal(await runAutoBackup(db,opened),'written');
   const copied = () => JSON.parse(files.get('davlenie-autobackup.json'));
-  await savePhase(db, phase(1));
+  await api.createPhase(db, phase(1));
   assert.equal(copied().phases.length, 0);
   const id = (await api.getPhases(db))[0].id;
-  await savePhase(db, { ...phase(1), title: 'edited' }, id);
+  await api.updatePhase(db, id, { ...phase(1), title: 'edited' });
   assert.equal(await runAutoBackup(db,opened+BACKUP_INTERVAL_MS-1),'recent');
   assert.equal(copied().phases.length,0);
   assert.equal(await runAutoBackup(db,opened+BACKUP_INTERVAL_MS),'written');
   assert.equal(copied().phases[0].title,'edited');
   const before=files.get('davlenie-autobackup.json');
-  await removePhase(db, id);
+  await api.deletePhase(db, id);
   assert.equal(files.get('davlenie-autobackup.json'),before);
   assert.equal(copied().sessions.length, 1);
   assert.equal(files.size,1);
@@ -498,7 +459,7 @@ test('disabled automatic copying is respected by period actions', async (t) => {
   files.clear();
   await api.addMeasurement(db, draft());
   await setAutoBackupEnabled(db, false);
-  await savePhase(db, phase(1));
+  await api.createPhase(db, phase(1));
   assert.equal((await api.getPhases(db)).length, 1);
   assert.equal(files.size, 0);
 });
@@ -511,7 +472,7 @@ test('a copy failure does not prevent a period from being saved', async (t) => {
   const originalConsoleError = console.error;
   console.error = () => {};
   try {
-    await savePhase(db, phase(1));
+    await api.createPhase(db, phase(1));
   } finally {
     console.error = originalConsoleError;
   }
@@ -677,7 +638,7 @@ test('legacy copies retain the newest dated file when the current file is missin
   assert.equal(files.size,2);assert.equal(files.get('davlenie-autobackup.json'),latest);
   assert.equal(files.get('unrelated.json'),'keep');
   assert.equal((await getLastAutoBackupAt(db)).toISOString(),'2026-10-10T12:00:00.000Z');
-  assert.equal((await api.getMeasurements(db,-1)).length,2);
+  assert.equal(await api.countMeasurements(db),2);
 });
 
 test('legacy daily copies consolidate without refreshing a recent snapshot or deleting unrelated JSON', async (t) => {
@@ -693,69 +654,18 @@ test('legacy daily copies consolidate without refreshing a recent snapshot or de
   assert.equal((await getLastAutoBackupAt(db)).getTime(),first);
 });
 
-test('history supports both date orders and high/low sorting independently for all three metrics', async (t) => {
-  const db = await fixture(t);
-  await api.addMeasurement(db, draft(10, [{ systolic: 140, diastolic: 80, pulse: 60 }]));
-  await api.addMeasurement(db, draft(11, [{ systolic: 120, diastolic: 95, pulse: 90 }]));
-  await api.addMeasurement(db, draft(12, [
-    { systolic: 160, diastolic: 70, pulse: 75 },
-    { systolic: 100, diastolic: 70, pulse: 75 },
-  ]));
-  const expected = {
-    newest: [3, 2, 1], oldest: [1, 2, 3],
-    'systolic-desc': [1, 3, 2], 'systolic-asc': [2, 3, 1],
-    'diastolic-desc': [2, 1, 3], 'diastolic-asc': [3, 1, 2],
-    'pulse-desc': [2, 3, 1], 'pulse-asc': [1, 3, 2],
-  };
-  for (const [sort, ids] of Object.entries(expected)) {
-    assert.deepEqual((await api.getMeasurements(db, -1, { sort })).map((item) => item.id), ids, sort);
-  }
-});
-
-test('history date filtering includes both selected days, excludes adjacent days and counts only matches', async (t) => {
-  const db = await fixture(t);
-  const start = new Date(2026, 8, 10);
-  const end = new Date(2026, 8, 11);
-  const nextDay = new Date(2026, 8, 12);
-  const moments = [
-    new Date(start.getTime() - 1), start,
-    new Date(2026, 8, 10, 12), new Date(nextDay.getTime() - 1), nextDay,
-  ];
-  for (const measuredAt of moments) await api.addMeasurement(db, { ...draft(), measuredAt });
-  const query = historyQuery({ sort: 'oldest', startDate: start, endDate: end });
-  assert.deepEqual((await api.getMeasurements(db, -1, query)).map((item) => item.id), [2, 3, 4]);
-  assert.equal(await api.countMeasurements(db, query), 3);
-  assert.equal((await api.getMeasurements(db, 2, query)).length, 2);
-  assert.equal(await api.countMeasurements(db, historyQuery({ ...DEFAULT_HISTORY_FILTERS, startDate: start })), 4);
-  assert.equal(await api.countMeasurements(db, historyQuery({ ...DEFAULT_HISTORY_FILTERS, endDate: end })), 4);
-  assert.equal(await api.countMeasurements(db, historyQuery(DEFAULT_HISTORY_FILTERS)), 5);
-  assert.equal(start.getHours(), 0);
-  assert.equal(end.getDate(), 11);
-});
-
-test('a one-day history filter includes the entire selected local day', async (t) => {
-  const db = await fixture(t);
-  const day = new Date(2026, 8, 10);
-  for (const measuredAt of [day, new Date(2026, 8, 10, 23, 59, 59, 999), new Date(2026, 8, 11)]) {
-    await api.addMeasurement(db, { ...draft(), measuredAt });
-  }
-  const query = historyQuery({ sort: 'newest', startDate: day, endDate: day });
-  assert.equal(await api.countMeasurements(db, query), 2);
-  assert.deepEqual((await api.getMeasurements(db, -1, query)).map((item) => item.id), [2, 1]);
-});
-
 test('upgrading an old readings table preserves measurements and backfills times exactly once', async (t) => {
   const db = await fixture(t);
   await api.addMeasurement(db, { ...draft(10, [reading(120), reading(121)]), note: 'keep this note' });
   await db.execAsync('ALTER TABLE measurement_readings DROP COLUMN measured_at');
   await api.initializeDatabase(db);
-  const details = await api.getMeasurementById(db, 1);
+  const details = await session(db, 1);
   assert.equal(details.note, 'keep this note');
-  assert.equal(details.readingCount, 2);
-  assert.deepEqual(details.readings.map((item) => item.measuredAt), [iso(10), iso(10)]);
+  assert.equal(details.readings.length, 2);
+  assert.deepEqual(await readingTimes(db, 1), [iso(10), iso(10)]);
   await db.runAsync('UPDATE measurement_readings SET measured_at = ? WHERE position = 1', iso(11));
   await api.initializeDatabase(db);
-  assert.deepEqual((await api.getMeasurementById(db, 1)).readings.map((item) => item.measuredAt), [iso(10), iso(11)]);
+  assert.deepEqual(await readingTimes(db, 1), [iso(10), iso(11)]);
 });
 
 test('the installed iOS 0.7.1 database upgrades in place without losing records, periods or settings', async t => {
@@ -788,12 +698,13 @@ test('the installed iOS 0.7.1 database upgrades in place without losing records,
   await api.initializeDatabase(db);
   assert.deepEqual(await legacyRows(), before);
   assert.equal(await api.getSetting(db, 'auto_backup_enabled'), 'no');
-  const record = await api.getMeasurementById(db, 42);
+  const record = await session(db, 42);
   assert.equal(record.note, 'Моя прежняя заметка');
   assert.deepEqual(record.tags, ['coffee']);
-  assert.equal(record.readingCount, 2);
-  assert.equal(record.systolic, 121);
-  assert.deepEqual(record.readings.map(r => [r.systolic, r.measuredAt]), [[120, iso(10)], [122, iso(10)]]);
+  assert.equal(record.readings.length, 2);
+  assert.equal(M.summary(record).systolic, 121);
+  assert.deepEqual(record.readings.map(r => r.systolic), [120, 122]);
+  assert.deepEqual(await readingTimes(db, 42), [iso(10), iso(10)]);
   const state = await clarity.readClarityState(db);
   assert.deepEqual(state.sessions.map(s => s.id), [42]);
   assert.deepEqual(state.phases.map(p => [p.id, p.title, p.note]), [[17, 'Мой прежний период', 'Заметка периода']]);
@@ -801,25 +712,21 @@ test('the installed iOS 0.7.1 database upgrades in place without losing records,
   await api.initializeDatabase(db);
   assert.deepEqual(await snapshot(db), migrated);
   await api.addMeasurement(db, draft(12));
-  assert.deepEqual((await api.getMeasurements(db)).map(r => r.id), [43, 42]);
+  assert.deepEqual((await sessions(db)).map(r => r.id).sort((a, b) => a - b), [42, 43]);
 });
 
 test('each series reading keeps its own time in details, JSON and restoration', async (t) => {
   const db = await fixture(t);
-  const entries = [
-    { values: reading(120), measuredAt: new Date(iso(10)) },
-    { values: reading(121), measuredAt: new Date(iso(11)) },
-  ];
-  const readings = readingsFromEntries(entries);
-  await api.addMeasurement(db, { ...draft(10, readings), readings });
-  let details = await api.getMeasurementById(db, 1);
+  const readings = [{ ...reading(120), measuredAt: iso(10) }, { ...reading(121), measuredAt: iso(11) }];
+  await api.addMeasurement(db, draft(10, readings));
+  const details = await session(db, 1);
   assert.equal(details.measuredAt, iso(10));
   assert.deepEqual(details.readings.map((item) => item.measuredAt), [iso(10), iso(11)]);
+  assert.deepEqual(await readingTimes(db, 1), [iso(10), iso(11)]);
   const backup = await api.buildBackupPayload(db);
   assert.deepEqual(backup.readings.map((item) => item.measured_at), [iso(10), iso(11)]);
   await api.restoreBackup(db, backup);
-  details = await api.getMeasurementById(db, 1);
-  assert.deepEqual(details.readings.map((item) => item.measuredAt), [iso(10), iso(11)]);
+  assert.deepEqual(await readingTimes(db, 1), [iso(10), iso(11)]);
 });
 
 test('backups without individual reading times remain restorable', async (t) => {
@@ -828,106 +735,7 @@ test('backups without individual reading times remain restorable', async (t) => 
   const backup = await api.buildBackupPayload(db);
   for (const item of backup.readings) delete item.measured_at;
   await api.restoreBackup(db, backup);
-  assert.deepEqual((await api.getMeasurementById(db, 1)).readings.map((item) => item.measuredAt), [iso(10), iso(10)]);
-});
-
-test('incomplete and invalid entry blocks cannot be silently dropped when converting a series', () => {
-  const complete = { values: reading(), measuredAt: new Date(iso(10)) };
-  const incomplete = { values: { systolic: 120 }, measuredAt: new Date(iso(10)) };
-  assert.equal(isEntryValid(incomplete), false);
-  assert.equal(isEntryValid(complete), true);
-  assert.throws(() => readingsFromEntries([complete, incomplete]));
-  assert.throws(() => readingsFromEntries([{ ...complete, values: reading(70) }]));
-  assert.throws(() => readingsFromEntries([{ ...complete, measuredAt: new Date('invalid') }]));
-  assert.throws(() => readingsFromEntries(Array.from({ length: 4 }, () => complete)));
-  assert.equal(readingsFromEntries([complete, complete, complete]).length, 3);
-});
-
-test('time statistics exclude records outside each interval while phase averages use the complete phase', async (t) => {
-  const db = await fixture(t);
-  const now = Date.parse('2026-09-17T12:00:00.000Z');
-  for (const daysAgo of [100, 40, 10, 3, -1]) {
-    await api.addMeasurement(db, { ...draft(), measuredAt: new Date(now - daysAgo * 86400000) });
-  }
-  const measurements = await api.getMeasurements(db, -1);
-  const counts = { week: 1, month: 2, quarter: 3, all: 5 };
-  for (const [interval, count] of Object.entries(counts)) {
-    assert.equal(measurementsInWindow(measurements, statisticsWindow(interval, now)).length, count);
-  }
-  const phase = { id: 1, kind: 'clean', title: 'full phase', startedAt: new Date(now - 50 * 86400000).toISOString(), endedAt: new Date(now - 5 * 86400000).toISOString(), note: '' };
-  assert.equal(statisticsForPhase(measurements, phase).count, 2);
-  assert.equal(measurementsInWindow(measurements, statisticsWindow('week', now)).length, 1);
-});
-
-test('chart phase bands use time boundaries, include gaps without measurements and stay clipped to the interval', async (t) => {
-  const db = await fixture(t);
-  for (const day of [2, 3, 29]) await api.addMeasurement(db, draft(day));
-  await api.createPhase(db, phase(1, 10));
-  await api.createPhase(db, phase(10, 20, 'coffee'));
-  await api.createPhase(db, phase(20, null, 'energy'));
-  const window = { from: Date.parse(iso(5)), until: Date.parse(iso(25)) };
-  const timeline = chartTimeline(await api.getMeasurements(db, -1), await api.getPhases(db), undefined, window);
-  assert.deepEqual(timeline.bands.map((band) => [band.phase.kind, band.start, band.end]), [
-    ['clean', 0, 0.25], ['coffee', 0.25, 0.75], ['energy', 0.75, 1],
-  ]);
-  const all = chartTimeline(await api.getMeasurements(db, -1));
-  assert.deepEqual(all.points.map((item) => item.id), [1, 2, 3]);
-  assert.equal(all.fraction(Date.parse(iso(3))), 1 / 27);
-});
-
-function descendants(element) {
-  if (Array.isArray(element)) return element.flatMap(descendants);
-  if (!element || typeof element !== 'object') return [];
-  return [element, ...descendants(element.props?.children)];
-}
-
-test('rendered pressure charts retain narrow phase names and bands for week, month and three months', async (t) => {
-  const db = await fixture(t);
-  const now = Date.parse(iso(17));
-  for (let minute = 0; minute < 60; minute += 1) {
-    await api.addMeasurement(db, { ...draft(), measuredAt: new Date(now - minute * 60000) });
-  }
-  await api.createPhase(db, { ...phase(1), startedAt: new Date(now - 100 * 86400000).toISOString(), endedAt: new Date(now - 30 * 60000).toISOString() });
-  await api.createPhase(db, { ...phase(1, null, 'coffee'), title: 'Short coffee phase', startedAt: new Date(now - 30 * 60000).toISOString() });
-  const measurements = await api.getMeasurements(db, -1);
-  const phases = await api.getPhases(db);
-  for (const interval of ['week', 'month', 'quarter', 'all']) {
-    const window = statisticsWindow(interval, now);
-    const nodes = descendants(WeeklyChart({ measurements: measurementsInWindow(measurements, window), phases, window }));
-    assert.ok(nodes.some((node) => node.type === 'Text' && node.props.children === 'Short coffee phase'), interval);
-    assert.ok(nodes.some((node) => node.type === 'Rect' && node.props.fill === '#8B5E3C'), interval);
-  }
-});
-
-test('a phase starting exactly at the last measurement remains visible at the chart boundary', async (t) => {
-  const db = await fixture(t);
-  await api.addMeasurement(db, draft(10));
-  await api.addMeasurement(db, draft(11));
-  await api.createPhase(db, phase(1, 11));
-  await api.createPhase(db, phase(11, null, 'coffee'));
-  const measurements = await api.getMeasurements(db, -1);
-  const phases = await api.getPhases(db);
-  const timeline = chartTimeline(measurements, phases);
-  assert.deepEqual(timeline.bands.map((band) => band.phase.kind), ['clean', 'coffee']);
-  const nodes = descendants(WeeklyChart({ measurements, phases }));
-  assert.ok(nodes.some((node) => node.type === 'Text' && node.props.children === 'coffee'));
-});
-
-test('home chart spaces measurements evenly even when their timestamps are irregular', () => {
-  const measurements = [
-    { id: 1, measuredAt: '2026-09-01T08:00:00.000Z', systolic: 120, diastolic: 80, pulse: 70, wellbeing: 7 },
-    { id: 2, measuredAt: '2026-09-01T08:01:00.000Z', systolic: 121, diastolic: 81, pulse: 71, wellbeing: 7 },
-    { id: 3, measuredAt: '2026-09-10T20:00:00.000Z', systolic: 122, diastolic: 82, pulse: 72, wellbeing: 7 },
-  ];
-  const nodes = descendants(WeeklyChart({ measurements, pointSpacing: 'uniform' }));
-  const systolicDots = nodes.filter((node) => node.type === 'Circle').slice(0, 3);
-  assert.deepEqual(systolicDots.map((node) => node.props.cx), [42, 185, 328]);
-});
-
-test('an empty filtered chart explains the selected interval instead of claiming the diary is empty', () => {
-  const message = 'Нет измерений в выбранном интервале';
-  const nodes = descendants(WeeklyChart({ measurements: [], emptyMessage: message }));
-  assert.ok(nodes.some((node) => node.type === 'Text' && node.props.children === message));
+  assert.deepEqual(await readingTimes(db, 1), [iso(10), iso(10)]);
 });
 
 test('legacy version 1 design lab JSON restores into the mobile database and round-trips to the web diary', async (t) => {

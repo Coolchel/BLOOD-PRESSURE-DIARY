@@ -7,10 +7,6 @@ function fileManager() {
   return DiaryBackup;
 }
 
-export async function saveExcelFile(uri: string, name: string) {
-  return fileManager().saveExcelAsync(uri, name);
-}
-
 export async function openBackupDirectory(location: BackupLocation) {
   await fileManager().openDirectoryAsync(location.kind === 'default' ? Paths.document.uri : location.uri,
     location.kind === 'ios' ? location.bookmark : null);
