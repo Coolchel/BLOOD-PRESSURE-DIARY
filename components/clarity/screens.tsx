@@ -6,7 +6,7 @@ import { usePreventRemove } from "expo-router/react-navigation";
 
 import { useSQLiteContext } from "expo-sqlite";
 import { Palette as P } from "@/constants/design";
-import { appLocale, countRecords, tr } from "@/localization";
+import { appLocale, appName, countRecords, tr } from "@/localization";
 import {
   deletePhase,
   updateMeasurementNote,
@@ -51,7 +51,7 @@ export function HomeScreen() {
     draft = M.resumableDraft(state),
     active = state.phases.filter((p) => M.phaseStatus(p) !== "finished");
   return (
-    <Screen title={tr("Давление")}>
+    <Screen title={appName()}>
       {latest ? (
         <View>
           <Section>{tr("Предыдущее измерение")}</Section>
@@ -1462,57 +1462,67 @@ export function ComparisonScreen() {
                         gap: 5,
                       }}
                     >
-                      {(["С", "По"] as const).map((label, side) => {
-                        const scheduled =
-                          phase && M.phaseStatus(phase) === "scheduled";
-                        const value = phase
-                          ? side
-                            ? phase.endedAt
-                              ? new Date(
-                                  Date.parse(phase.endedAt) - 1,
-                                ).toISOString()
-                              : null
-                            : phase.startedAt
-                          : side
-                            ? selection.to
-                              ? selection.to + "T12:00:00"
-                              : items[0]?.measuredAt
-                            : selection.from
-                              ? selection.from + "T12:00:00"
-                              : items.at(-1)?.measuredAt;
-                        return (
-                          <View key={label} style={[styles.row, { gap: 5 }]}>
+                      {/* Labels form their own column, sized by the longest translation
+                          ("From", "Desde"), while equal line heights keep both dates aligned. */}
+                      <View style={[styles.row, { gap: 5, alignItems: "flex-start" }]}>
+                        <View style={{ gap: 5, minWidth: 18 }}>
+                          {(["С", "По"] as const).map((label) => (
                             <Text
-                              style={{
-                                fontSize: 10,
-                                color: P.muted,
-                                width: 18,
-                              }}
+                              key={label}
+                              numberOfLines={1}
+                              style={{ fontSize: 10, lineHeight: 18, color: P.muted }}
                             >
                               {tr(label)}
                             </Text>
-                            <Text style={{ fontSize: 13, flex: 1 }}>
-                              {value ? (
-                                <>
-                                  {appLocale.date(value, {
-                                    day: "numeric",
-                                    month: "short",
-                                  })}{" "}
-                                  <Text
-                                    style={{ fontSize: 10, color: P.muted }}
-                                  >
-                                    {appLocale.date(value, { year: "numeric" })}
-                                  </Text>
-                                </>
-                              ) : phase ? (
-                                tr(scheduled ? "Без даты" : "Сейчас")
-                              ) : (
-                                "—"
-                              )}
-                            </Text>
-                          </View>
-                        );
-                      })}
+                          ))}
+                        </View>
+                        <View style={{ flex: 1, gap: 5 }}>
+                          {(["С", "По"] as const).map((label, side) => {
+                            const scheduled =
+                              phase && M.phaseStatus(phase) === "scheduled";
+                            const value = phase
+                              ? side
+                                ? phase.endedAt
+                                  ? new Date(
+                                      Date.parse(phase.endedAt) - 1,
+                                    ).toISOString()
+                                  : null
+                                : phase.startedAt
+                              : side
+                                ? selection.to
+                                  ? selection.to + "T12:00:00"
+                                  : items[0]?.measuredAt
+                                : selection.from
+                                  ? selection.from + "T12:00:00"
+                                  : items.at(-1)?.measuredAt;
+                            return (
+                              <Text
+                                key={label}
+                                numberOfLines={1}
+                                style={{ fontSize: 13, lineHeight: 18 }}
+                              >
+                                {value ? (
+                                  <>
+                                    {appLocale.date(value, {
+                                      day: "numeric",
+                                      month: "short",
+                                    })}{" "}
+                                    <Text
+                                      style={{ fontSize: 10, color: P.muted }}
+                                    >
+                                      {appLocale.date(value, { year: "numeric" })}
+                                    </Text>
+                                  </>
+                                ) : phase ? (
+                                  tr(scheduled ? "Без даты" : "Сейчас")
+                                ) : (
+                                  "—"
+                                )}
+                              </Text>
+                            );
+                          })}
+                        </View>
+                      </View>
                       {phase && M.phaseStatus(phase) === "scheduled" ? (
                         <Text style={{ fontSize: 10, color: P.muted }}>
                           {tr("Запланирован")}

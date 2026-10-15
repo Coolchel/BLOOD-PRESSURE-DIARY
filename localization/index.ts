@@ -4,5 +4,6 @@ import { create } from '../design-lab/i18n';
 // identifiers stay unchanged; only developer-authored interface text uses tr.
 export const appLocale = create();
 export const tr = appLocale.text;
+export const appName = () => appLocale.appName();
 export const getLocale = () => appLocale.locale;
 export const countRecords = (value: number) => appLocale.count(value, 'records');

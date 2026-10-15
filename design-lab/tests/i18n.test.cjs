@@ -20,6 +20,18 @@ test('all UI entries have complete text in all four translations and preserve ev
   }
 });
 
+test('the app name is separate from the blood pressure metric label and follows language changes',()=>{
+  const locale=I.create('ru');
+  assert.equal(locale.appName(),'Давление');
+  locale.setLanguage('en');
+  assert.equal(locale.appName(),'Pressure Diary');
+  assert.equal(locale.text('Давление'),'Blood pressure');
+  for(const code of ['fr','es','de']){
+    locale.setLanguage(code);
+    assert.equal(locale.appName(),locale.text('Давление'));
+  }
+});
+
 test('HTML translation protects interpolated diary text, escaped attributes and canonical tag values',()=>{
   const en=I.create('en'),fr=I.create('fr');
   const title='Давление',note='Настройки <текст> {{0}}';

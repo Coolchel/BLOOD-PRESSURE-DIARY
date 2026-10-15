@@ -637,7 +637,7 @@
     chartData={};const top=['home','history','statistics','phases','settings'].includes(ui.view);
     const showNav=top||(theme==='clarity'&&['detail','phase'].includes(ui.view));
     const navView=ui.view==='detail'?ui.detailReturn:ui.view==='phase'?'phases':ui.view;
-    const titles={home:tr(concept.home),history:tr('История'),statistics:tr('Статистика'),phases:tr('Периоды'),settings:tr('Настройки'),entry:tr('Новое измерение'),detail:tr('Измерение'),phase:tr('Период')};
+    const titles={home:concept.home==='Давление'?i18n.appName():tr(concept.home),history:tr('История'),statistics:tr('Статистика'),phases:tr('Периоды'),settings:tr('Настройки'),entry:tr('Новое измерение'),detail:tr('Измерение'),phase:tr('Период')};
     if(theme==='clarity'&&ui.view==='phase'){
       const p=state.phases.find(p=>p.id===ui.id);
       if(p)titles.phase=M.phaseStatus(p)==='finished'?tr('Завершённый период'):tr('Активный период');

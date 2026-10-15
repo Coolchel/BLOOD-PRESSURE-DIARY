@@ -2764,7 +2764,7 @@
     "de": "Datei konnte nicht gelesen werden"
   },
   "Выберите резервную копию JSON приложения «Давление».": {
-    "en": "Choose a JSON backup from the Blood Pressure app.",
+    "en": "Choose a JSON backup from the Pressure Diary app.",
     "fr": "Choisissez une sauvegarde JSON de l'application de pression artérielle.",
     "es": "Elige una copia JSON de la aplicación Presión arterial.",
     "de": "Wähle eine JSON-Sicherung aus der Blutdruck-App."
@@ -3316,7 +3316,7 @@
     "de": "Wähle eine Diagrammansicht."
   },
   "Выберите непустую резервную копию JSON приложения «Давление».": {
-    "en": "Choose a non-empty JSON backup from the Blood Pressure app.",
+    "en": "Choose a non-empty JSON backup from the Pressure Diary app.",
     "fr": "Choisissez une sauvegarde JSON non vide de l'application de pression artérielle.",
     "es": "Elige una copia JSON no vacía de la aplicación Presión arterial.",
     "de": "Wähle eine nicht leere JSON-Sicherung der Blutdruck-App."
@@ -3670,7 +3670,7 @@
     "de": "Export fehlgeschlagen"
   },
   "Выбери резервную копию, созданную приложением.": {
-    "en": "Choose a JSON backup from the Blood Pressure app.",
+    "en": "Choose a JSON backup from the Pressure Diary app.",
     "fr": "Choisissez une sauvegarde JSON de l'application de pression artérielle.",
     "es": "Elige una copia JSON de la aplicación Presión arterial.",
     "de": "Wähle eine JSON-Sicherung aus der Blutdruck-App."

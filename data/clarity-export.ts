@@ -1,6 +1,6 @@
 import * as XLSX from "@e965/xlsx";
 import * as M from "../design-lab/model";
-import { tr } from "@/localization";
+import { appName, tr } from "@/localization";
 
 /** Excel contains the same unrounded values and every matching period as the prototype. */
 export function clarityWorkbook(state: Pick<M.State, "sessions" | "phases">) {
@@ -118,7 +118,7 @@ export function clarityWorkbook(state: Pick<M.State, "sessions" | "phases">) {
   );
   book.Props = {
     Title: tr("Дневник артериального давления"),
-    Author: tr("Давление"),
+    Author: appName(),
   };
   return book;
 }

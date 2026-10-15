@@ -7,6 +7,7 @@ export type Translator = {
 export type DiaryLocale = {
   text: Translator;
   html: Translator;
+  appName(): string;
   readonly language: LanguageCode;
   readonly locale: string;
   setLanguage(language: LanguageCode): void;
