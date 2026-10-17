@@ -3838,10 +3838,10 @@
     "de": "Datum und Uhrzeit"
   },
   "Сохранено": {
-    "en": "saved",
-    "fr": "enregistrées",
-    "es": "guardados",
-    "de": "gespeichert"
+    "en": "Saved",
+    "fr": "Enregistré",
+    "es": "Guardado",
+    "de": "Gespeichert"
   },
   "уд/м": {
     "en": "bpm",
