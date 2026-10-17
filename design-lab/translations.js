@@ -2604,8 +2604,8 @@
   "Замеры": {
     "en": "Readings",
     "fr": "Relevés",
-    "es": "Mediciones",
-    "de": "Messungen"
+    "es": "Mediciones individuales",
+    "de": "Einzelmessungen"
   },
   "Номер записи": {
     "en": "Record number",

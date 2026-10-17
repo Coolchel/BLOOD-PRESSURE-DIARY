@@ -848,6 +848,26 @@ test('native XLSX retains raw averages, all intersecting periods and every origi
   assert.equal(periods.find(row=>row[0]==='Second')[2],M.PHASE_COLORS[4]);
 });
 
+test('XLSX builds in every interface language with distinct sheet names and no Russian interface text', async t => {
+  const db=await fixture(t);await api.createPhase(db,{...phase(1),title:'Morning coffee',kind:'custom',icon:'coffee',color:M.PHASE_COLORS[4]});
+  await api.addMeasurement(db,{...draft(10,[reading(120),reading(122)]),tags:['Спокойно','После кофе'],note:'After a walk'});
+  const state=await clarity.readClarityState(db), XLSX=require('@e965/xlsx');
+  t.after(()=>appLocale.setLanguage('ru'));
+  for(const lang of ['ru','en','fr','es','de']){
+    appLocale.setLanguage(lang);
+    // Excel rejects two sheets with one name, so a shared translation would break the whole export.
+    const book=clarityWorkbook(state);
+    assert.equal(new Set(book.SheetNames).size,3,lang);
+    if(lang==='ru')continue;
+    const reread=XLSX.read(XLSX.write(book,{type:'buffer',bookType:'xlsx'}),{type:'buffer'});
+    for(const name of reread.SheetNames){
+      assert.doesNotMatch(name,/[А-Яа-яЁё]/,lang);
+      for(const row of XLSX.utils.sheet_to_json(reread.Sheets[name],{header:1}))
+        for(const cell of row)if(typeof cell==='string')assert.doesNotMatch(cell,/[А-Яа-яЁё]/,`${lang} ${name}: ${cell}`);
+    }
+  }
+});
+
 test('saving an entry uses the current SQLite draft of the other mode rather than a stale screen snapshot', async t => {
   const db = await fixture(t), old = await clarity.readClarityState(db);
   const single = M.newDraft('single', Date.parse(iso(10))), series = M.newDraft('series', Date.parse(iso(10)));
