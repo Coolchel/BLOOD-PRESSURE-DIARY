@@ -2765,9 +2765,9 @@
   },
   "Выберите резервную копию JSON приложения «Давление».": {
     "en": "Choose a JSON backup from the Pressure Diary app.",
-    "fr": "Choisissez une sauvegarde JSON de l'application de pression artérielle.",
-    "es": "Elige una copia JSON de la aplicación Presión arterial.",
-    "de": "Wähle eine JSON-Sicherung aus der Blutdruck-App."
+    "fr": "Choisissez une sauvegarde JSON de l'application Pressure Diary.",
+    "es": "Elige una copia JSON de la aplicación Pressure Diary.",
+    "de": "Wähle eine JSON-Sicherung aus der App Pressure Diary."
   },
   "Не удалось сохранить заметку:": {
     "en": "Could not save the note:",
@@ -3317,9 +3317,9 @@
   },
   "Выберите непустую резервную копию JSON приложения «Давление».": {
     "en": "Choose a non-empty JSON backup from the Pressure Diary app.",
-    "fr": "Choisissez une sauvegarde JSON non vide de l'application de pression artérielle.",
-    "es": "Elige una copia JSON no vacía de la aplicación Presión arterial.",
-    "de": "Wähle eine nicht leere JSON-Sicherung der Blutdruck-App."
+    "fr": "Choisissez une sauvegarde JSON non vide de l'application Pressure Diary.",
+    "es": "Elige una copia JSON no vacía de la aplicación Pressure Diary.",
+    "de": "Wähle eine nicht leere JSON-Sicherung der App Pressure Diary."
   },
   "Повторяющиеся или некорректные номера записей.": {
     "en": "Duplicate or invalid record numbers.",
@@ -3671,9 +3671,9 @@
   },
   "Выбери резервную копию, созданную приложением.": {
     "en": "Choose a JSON backup from the Pressure Diary app.",
-    "fr": "Choisissez une sauvegarde JSON de l'application de pression artérielle.",
-    "es": "Elige una copia JSON de la aplicación Presión arterial.",
-    "de": "Wähle eine JSON-Sicherung aus der Blutdruck-App."
+    "fr": "Choisissez une sauvegarde JSON de l'application Pressure Diary.",
+    "es": "Elige una copia JSON de la aplicación Pressure Diary.",
+    "de": "Wähle eine JSON-Sicherung aus der App Pressure Diary."
   },
   "Экспортировать Excel": {
     "en": "Export Excel",

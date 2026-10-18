@@ -28,7 +28,8 @@ test('the app name is separate from the blood pressure metric label and follows 
   assert.equal(locale.text('Давление'),'Blood pressure');
   for(const code of ['fr','es','de']){
     locale.setLanguage(code);
-    assert.equal(locale.appName(),locale.text('Давление'));
+    assert.equal(locale.appName(),'Pressure Diary');
+    assert.notEqual(locale.text('Давление'),'Pressure Diary');
   }
 });
 

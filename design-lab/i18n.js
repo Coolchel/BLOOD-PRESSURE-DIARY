@@ -62,8 +62,9 @@
       }
       return (code==='fr'?number<2:number===1)?'one':'other';
     }
-    // The app's own name differs from the «Давление» metric label in English, so it cannot share that catalog key.
-    const appNames={ru:'Давление',en:'Pressure Diary'};
+    // The app's own name: «Давление» in Russian, Pressure Diary in every other language. It differs from
+    // the «Давление» metric label outside Russian, so it cannot share that catalog key.
+    const appNames={ru:'Давление',en:'Pressure Diary',fr:'Pressure Diary',es:'Pressure Diary',de:'Pressure Diary'};
     const api={
       text,html,
       appName(){return appNames[code]||translate('Давление');},
